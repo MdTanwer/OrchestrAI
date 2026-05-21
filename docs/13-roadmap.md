@@ -194,6 +194,6 @@
 | LinkedIn post views | 10K+ |
 | Test Coverage | 80%+ |
 | Concurrent executions | 100+ |
-| Documentation pages | 14 |
+| Documentation pages | 15 |
 | Plugins built | 10+ |
 | Interview calls | 5+ |

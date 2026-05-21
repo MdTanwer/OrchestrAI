@@ -88,6 +88,17 @@ tasks:
 
 Behind the scenes, `contextKey` stores conversation history.
 
+### Memory vs vector stores
+
+| Mechanism | What it does | Built into OrchestrAI? |
+|-----------|--------------|------------------------|
+| `contextKey` | Shared conversation history between agent tasks in one execution | Yes |
+| `outputs.*` / `vars.*` | Pass structured data between any tasks | Yes |
+| RAG (retrieval) | Search documents, inject into prompts | Via plugins + **your** vector DB |
+| Vector database | Long-term embeddings storage | **No** — use Pinecone, Weaviate, pgvector, etc. via `http.request` or a custom plugin |
+
+OrchestrAI orchestrates **when** agents run and **what** they receive; it does not replace a dedicated vector database. See [Vision & Goals — Out of Scope](./01-vision-and-goals.md#what-we-are-not-building-out-of-scope).
+
 ---
 
 ## Human-in-the-Loop

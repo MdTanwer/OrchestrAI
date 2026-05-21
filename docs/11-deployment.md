@@ -57,10 +57,8 @@ services:
     build: ./worker
     depends_on:
       - kafka
-      - postgres
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
-      DB_URL: jdbc:postgresql://postgres:5432/orchestrai
     deploy:
       replicas: 2
 
@@ -144,7 +142,6 @@ docker-compose down
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | KAFKA_BOOTSTRAP | Yes | — | Kafka bootstrap servers |
-| DB_URL | Yes | — | PostgreSQL JDBC URL |
 | WORKER_THREADS | No | 10 | Thread pool size |
 | WORKER_ID | No | auto | Unique worker identifier |
 | PLUGINS_DIR | No | /plugins | Custom plugins directory |
@@ -286,3 +283,116 @@ orchestrai/
 ├── orchestrai-cli/           # CLI tool
 └── docker-compose.yml
 ```
+
+---
+
+## CLI Tool (orchestrai-cli)
+
+### Installation
+
+```bash
+# Mac (Homebrew)
+brew install orchestrai
+
+# Linux
+curl -L https://github.com/yourname/orchestrai/releases/latest/orchestrai-linux -o orchestrai
+chmod +x orchestrai
+sudo mv orchestrai /usr/local/bin/
+
+# Windows (Scoop)
+scoop install orchestrai
+```
+
+### CLI Commands
+
+```bash
+# ── Flow Management ──────────────────────────
+orchestrai flow list                        # List all flows
+orchestrai flow get default/my-flow         # Get flow details
+orchestrai flow apply -f my-flow.yaml       # Create/update flow
+orchestrai flow delete default/my-flow      # Delete flow
+orchestrai flow validate -f my-flow.yaml    # Validate YAML only
+
+# ── Execution ────────────────────────────────
+orchestrai execute default/my-flow            # Run a flow
+orchestrai execute default/my-flow \
+  --input userQuery="Hello"                   # Run with inputs
+orchestrai execute default/my-flow \
+  --watch                                     # Run + stream logs live
+
+# ── Execution Monitoring ─────────────────────
+orchestrai execution list                     # List executions
+orchestrai execution get <id>                 # Get execution details
+orchestrai execution logs <id>                 # View logs
+orchestrai execution logs <id> --follow       # Stream logs live
+orchestrai execution cancel <id>              # Cancel execution
+
+# ── Plugins ──────────────────────────────────
+orchestrai plugin list                        # List plugins
+orchestrai plugin info openai.chat            # Plugin details
+
+# ── Secrets ──────────────────────────────────
+orchestrai secret set OPENAI_API_KEY          # Set secret (prompts value)
+orchestrai secret list                        # List secret keys
+orchestrai secret delete OPENAI_API_KEY       # Delete secret
+
+# ── Server ───────────────────────────────────
+orchestrai server start                       # Start local server
+orchestrai server status                      # Check server health
+
+# ── Config ───────────────────────────────────
+orchestrai config set server.url http://localhost:8080
+orchestrai config get server.url
+orchestrai config view                        # Show all config
+```
+
+### CLI Config File
+
+Stored at `~/.orchestrai/config.yaml`:
+
+```yaml
+server:
+  url: http://localhost:8080
+  timeout: 30s
+
+auth:
+  token: eyJhbGci...   # auto-stored after login
+
+defaults:
+  namespace: default
+  output: table        # table | json | yaml
+```
+
+### CLI Login
+
+```bash
+# Login to server
+orchestrai login
+# > Server URL: http://localhost:8080
+# > Email: user@example.com
+# > Password: ****
+# ✅ Logged in successfully!
+
+# Logout
+orchestrai logout
+```
+
+### CLI Output Formats
+
+```bash
+# Table (default)
+orchestrai flow list
+# ┌─────────────┬───────────┬──────────┐
+# │ ID          │ Namespace │ Tasks    │
+# ├─────────────┼───────────┼──────────┤
+# │ my-flow     │ default   │ 3        │
+# └─────────────┴───────────┴──────────┘
+
+# JSON
+orchestrai flow list --output json
+
+# YAML
+orchestrai flow list --output yaml
+```
+
+See [14 — Native Image](./14-native-image.md) for building the CLI as a GraalVM native binary.

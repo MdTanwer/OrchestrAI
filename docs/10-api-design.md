@@ -40,13 +40,29 @@ tasks: [...]
 
 #### `GET /flows`
 
-List all flows.
+List all flows (returns latest version by default).
 
 **Query params:** `namespace`, `page`, `size`
 
 #### `GET /flows/{namespace}/{id}`
 
-Get a specific flow.
+Get the latest version of a specific flow.
+
+#### `GET /flows/{namespace}/{id}/versions`
+
+List all immutable historical versions of a specific flow.
+
+**Response:** `200 OK`
+```json
+[
+  { "version": 2, "createdAt": "2024-01-15T10:00:00Z" },
+  { "version": 1, "createdAt": "2024-01-14T09:00:00Z" }
+]
+```
+
+#### `GET /flows/{namespace}/{id}/versions/{version}`
+
+Retrieve a specific historical version of a flow.
 
 #### `PUT /flows/{namespace}/{id}`
 
@@ -54,7 +70,7 @@ Update a flow (creates new version).
 
 #### `DELETE /flows/{namespace}/{id}`
 
-Delete a flow.
+Delete a flow (cascade deletes all historical versions and associated executions).
 
 ---
 
@@ -63,6 +79,8 @@ Delete a flow.
 #### `POST /flows/{namespace}/{id}/execute`
 
 Start a new execution.
+
+**Query params:** `version` (optional, integer. Defaults to latest version if omitted)
 
 **Body:**
 

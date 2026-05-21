@@ -18,7 +18,7 @@ Make AI workflows definable in under 20 lines of YAML.
 
 ### Goal 3: Observability
 
-Every token, every decision, every cost — visible and traceable.
+Every token, every decision, every cost — visible and traceable. Per-task inputs, outputs, latency, and errors are inspectable in the dashboard and API.
 
 ### Goal 4: Extensibility
 
@@ -27,6 +27,10 @@ Anyone can write a plugin in 30 minutes.
 ### Goal 5: Performance
 
 Execute 1000+ concurrent workflows on a single node.
+
+### Goal 6: Focus on agent logic
+
+Reduce time spent on orchestration plumbing so teams ship AI products faster — they define agents and prompts; OrchestrAI handles execution, retries, triggers, and ops.
 
 ---
 
@@ -70,14 +74,3 @@ Execute 1000+ concurrent workflows on a single node.
 - [ ] 80%+ unit test coverage
 - [ ] Complete documentation
 - [ ] Open-source on GitHub
-
----
-
-## Personal Goals (Author)
-
-This project is being built to:
-
-1. Demonstrate **senior-level engineering** skills
-2. Showcase mastery of **distributed systems**
-3. Build a **portfolio piece** for career growth
-4. Contribute to the **open-source community**

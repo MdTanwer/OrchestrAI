@@ -1,18 +1,16 @@
 # 08 — Plugin System
 
-## What is a Plugin?
-
-A plugin is a self-contained Java class that implements a Task type. It defines:
-
-- Configuration schema
-- Execution logic
-- Output structure
+OrchestrAI features an extensible, plugin-based architecture modeled after Kestra. Every task in a workflow is executed by a specific plugin. Plugins define their configuration schema, implementation execution logic, and outputs.
 
 ---
 
 ## Plugin Interface
 
+All plugins must implement the lightweight `Plugin` interface:
+
 ```java
+package io.orchestrai.plugin.sdk;
+
 public interface Plugin<C extends PluginConfig, O extends PluginOutput> {
 
     String type();                    // e.g., "openai.chat"
@@ -27,22 +25,16 @@ public interface Plugin<C extends PluginConfig, O extends PluginOutput> {
 
 ---
 
-## Plugin Lifecycle
-
-1. Worker starts
-2. ServiceLoader discovers plugins (`META-INF/services`)
-3. Plugins register with PluginRegistry
-4. Worker receives task from Kafka
-5. Registry looks up plugin by type
-6. Plugin config is deserialized from JSON
-7. `Plugin.execute()` is called
-8. Output is serialized and published
-
----
-
 ## Example Plugin: OpenAI Chat
 
+Below is a complete implementation of the built-in `OpenAiChatPlugin`:
+
 ```java
+package io.orchestrai.plugins.openai;
+
+import io.orchestrai.plugin.sdk.*;
+import java.math.BigDecimal;
+
 @PluginType("openai.chat")
 public class OpenAiChatPlugin implements Plugin<OpenAiChatConfig, OpenAiChatOutput> {
 
@@ -62,38 +54,42 @@ public class OpenAiChatPlugin implements Plugin<OpenAiChatConfig, OpenAiChatOutp
     }
 
     @Override
-    public OpenAiChatOutput execute(OpenAiChatConfig config, ExecutionContext ctx) {
-        String apiKey = ctx.getSecret("OPENAI_API_KEY");
+    public OpenAiChatOutput execute(OpenAiChatConfig config, ExecutionContext ctx) throws PluginException {
+        // Late-bound secret resolution inside the worker sandbox (highly secure!)
+        String apiKey = ctx.getSecret(config.getSecretKeyRef() != null ? config.getSecretKeyRef() : "OPENAI_API_KEY");
 
-        OpenAiClient client = new OpenAiClient(apiKey);
-        ChatResponse response = client.chat(
-            config.getModel(),
-            config.getPrompt(),
-            config.getTemperature()
-        );
+        try {
+            OpenAiClient client = new OpenAiClient(apiKey);
+            ChatResponse response = client.chat(
+                config.getModel(),
+                config.getPrompt(),
+                config.getTemperature()
+            );
 
-        return OpenAiChatOutput.builder()
-            .response(response.text())
-            .tokensUsed(response.tokens())
-            .costUsd(calculateCost(response.tokens(), config.getModel()))
-            .build();
+            return OpenAiChatOutput.builder()
+                .response(response.text())
+                .tokensUsed(response.tokens())
+                .costUsd(calculateCost(response.tokens(), config.getModel()))
+                .build();
+        } catch (Exception e) {
+            throw new PluginException("OpenAI call failed", e);
+        }
     }
 }
 ```
 
-### Config Class
-
+### Config Schema class
 ```java
 public class OpenAiChatConfig implements PluginConfig {
     @NotNull private String model;
     @NotNull private String prompt;
     private Double temperature = 0.7;
     private Integer maxTokens = 2000;
+    private String secretKeyRef = "OPENAI_API_KEY"; // Overridable key reference
 }
 ```
 
-### Output Class
-
+### Output Schema class
 ```java
 public class OpenAiChatOutput implements PluginOutput {
     private String response;
@@ -104,61 +100,56 @@ public class OpenAiChatOutput implements PluginOutput {
 
 ---
 
-## Built-in Plugins
+## Core & Built-in Plugins
 
-### Core Plugins
-
-| Type | Description |
-|------|-------------|
-| core.if | Conditional branching |
-| core.parallel | Parallel execution |
-| core.foreach | Iteration |
-| core.delay | Sleep |
-| core.set | Set variable |
-
-### AI Plugins
+### 1. Core Plugins
+Core plugins manage dynamic execution logic and are processed directly by the stateless Executor.
 
 | Type | Description |
 |------|-------------|
-| openai.chat | OpenAI chat completion |
-| openai.embedding | OpenAI embeddings |
-| anthropic.chat | Claude chat |
-| google.gemini | Gemini |
-| ollama.chat | Local LLM |
+| `core.if` | Dynamic conditional branching. |
+| `core.parallel` | Asynchronous concurrent task execution. |
+| `core.foreach` | Dynamic lists loops. |
+| `core.delay` | Reactive pause for a specified duration. |
+| `core.set` | Set workflow-wide variable values. |
 
-### Integration Plugins
-
-| Type | Description |
-|------|-------------|
-| http.request | HTTP call |
-| shell.exec | Shell command |
-| kafka.produce | Publish to Kafka |
-| postgres.query | SQL query |
-| s3.upload | Upload to S3 |
-
-### Human Plugins
+### 2. AI Plugins
+Each AI plugin is provider-agnostic, allowing teams to swap model backends in the flow YAML simply by changing the task `type`.
 
 | Type | Description |
 |------|-------------|
-| human.approval | Pause for approval |
-| human.input | Pause for input |
+| `openai.chat` | GPT-4o, GPT-3.5-turbo chat models. |
+| `openai.embedding` | Vector embedding generation. |
+| `anthropic.chat` | Claude 3, Sonnet, Opus. |
+| `google.gemini` | Gemini Pro / Flash integrations. |
+| `ollama.chat` | Local open LLM execution (LLaMA 3, Mistral) via Ollama. |
+
+### 3. Integration Plugins
+Connect workflows to databases and external tools:
+
+| Type | Description |
+|------|-------------|
+| `http.request` | Make arbitrary REST/GraphQL HTTP requests. |
+| `shell.exec` | Execute secure shell scripts. |
+| `kafka.produce` | Push messages onto Kafka streams. |
+| `postgres.query` | Transact SQL queries on a database. |
+| `s3.upload` | Pipe files to Amazon S3. |
+
+### 4. Human Plugins
+Pause state machine flow for manual decisions:
+
+| Type | Description |
+|------|-------------|
+| `human.approval` | Pauses flow run until accepted by an authorized reviewer. |
+| `human.input` | Pauses flow run to request form inputs. |
 
 ---
 
-## Plugin Validation
+## Custom Plugin Distribution & JVM Classloading
 
-Each plugin's config is validated using:
+Custom plugins are developed by implementing the `Plugin` SDK interface and compiled as external JARs. 
 
-- Bean Validation (`@NotNull`, `@Min`, etc.)
-- JSON Schema (auto-generated from class)
-- Custom validators
-
----
-
-## Distribution
-
-Plugins are packaged as JAR files and:
-
-- Bundled with worker (built-in)
-- Loaded from `/plugins` directory (custom)
-- Hot-reloadable (future)
+### Classloader Isolation & Dependency Conflicts
+To prevent JAR dependency conflicts (e.g. Plugin A using Jackson 2.15 while Plugin B uses Jackson 2.12):
+1.  **Quarkus Classloader Isolation:** In JVM mode, OrchestrAI loads plugins from the `/plugins` directory using separate, isolated child classloaders.
+2.  **GraalVM Native Image Compilations:** Dynamic JAR loading is **not supported** in GraalVM Native Image. All custom plugins must be added as compile-time dependencies to the worker module and registered inside `PluginRegistry` before Native image compilation. See [14 — Native Image](./14-native-image.md#reflection-plugins-registration) for details.

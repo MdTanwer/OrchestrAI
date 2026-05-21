@@ -8,15 +8,19 @@ OrchestrAI is an open-source, Java-based orchestration platform designed specifi
 
 ## Why OrchestrAI?
 
-Modern AI applications need multiple agents working together — but orchestrating them is painful. OrchestrAI provides:
+Most teams build AI agents in **isolation** — hard to chain them into reliable, observable production workflows. OrchestrAI connects them into **multi-agent pipelines** defined in YAML (Agent A → Agent B).
 
-- Declarative YAML workflows
-- Multi-LLM support (OpenAI, Claude, Gemini, local models)
-- Plugin-based architecture
-- Distributed execution via Kafka
-- Real-time monitoring dashboard
-- Token and cost tracking
-- Human-in-the-loop steps
+- **Declarative YAML** — chain agents; outputs flow to the next step
+- **Swappable LLM plugins** — OpenAI, Claude, Gemini, Ollama/LLaMA, custom models
+- **Retries and model fallback** — auto-retry or switch provider on timeout/rate limit
+- **Cost tracking** — tokens and USD per execution
+- **Human-in-the-loop** — pause for approval, then continue
+- **Shared context** — conversation history across steps (RAG via external vector DBs)
+- **Triggers** — REST API, webhooks, cron, Kafka events
+- **Full observability** — real-time dashboard, logs, per-task I/O, latency, errors
+- **Distributed execution** via Kafka
+
+See [Overview — Value Proposition](./00-overview.md#value-proposition) for the full breakdown.
 
 ---
 
@@ -38,6 +42,7 @@ Modern AI applications need multiple agents working together — but orchestrati
 | 11 | [Deployment](./11-deployment.md) | Running OrchestrAI |
 | 12 | [Security](./12-security.md) | Auth and secrets |
 | 13 | [Roadmap](./13-roadmap.md) | Development plan |
+| 14 | [Native Image](./14-native-image.md) | GraalVM native builds |
 
 ---
 

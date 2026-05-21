@@ -1,52 +1,78 @@
 # 04 — YAML Schema Design
 
+Workflows in OrchestrAI are written in declarative YAML. The schema enforces static validations before execution and structures tasks, inputs, variables, triggers, and error routing.
+
+---
+
 ## Flow YAML Structure
 
 ```yaml
-# Required fields
-id: my-flow-id
-namespace: my-namespace
+# Required top-level identifier and folder grouping
+id: content-review-workflow
+namespace: production.marketing
 
-# Optional metadata
-description: "What this flow does"
+# Optional human documentation and tag filters
+description: "Pipes input query to AI agents, reviews toxicity, and posts output."
 labels:
-  team: ai
-  env: prod
+  team: content
+  tier: production
 
-# Optional inputs (parameters)
+# Inputs requested at execution time
 inputs:
-  - id: userQuery
+  - id: articleText
     type: STRING
     required: true
-    defaults: "Hello"
+    description: "The text content to moderate and publish."
 
-# Optional variables
+# Shared variables resolved at runtime
 variables:
-  model: "gpt-4"
-  temperature: 0.7
+  defaultModel: gpt-4o
+  minConfidence: 0.85
 
-# Triggers (how flow starts)
+# Automatic event triggers
 triggers:
-  - id: daily
+  - id: daily-cleanup
     type: schedule.cron
-    cron: "0 9 * * *"
+    cron: "0 0 * * *"
 
-# Tasks (the actual work)
+# Ordered sequence of tasks
 tasks:
-  - id: task1
+  - id: initial-draft
     type: openai.chat
-    model: "{{ vars.model }}"
-    prompt: "{{ inputs.userQuery }}"
+    prompt: "Proofread and polish this text: {{ inputs.articleText }}"
 
-  - id: task2
-    type: anthropic.chat
-    prompt: "Summarize: {{ outputs.task1.response }}"
+  - id: parallel-checks
+    type: core.parallel
+    tasks:
+      - id: toxicity
+        type: openai.moderation
+        input: "{{ outputs.initial-draft.response }}"
+      - id: spelling
+        type: custom.spellcheck
+        text: "{{ outputs.initial-draft.response }}"
 
-# Error handling
+  - id: filter-decision
+    type: core.if
+    condition: "{{ outputs.parallel-checks.toxicity.flagged || outputs.parallel-checks.spelling.errors > 3 }}"
+    then:
+      - id: notify-reject
+        type: http.request
+        method: POST
+        url: "https://alerts.example.com/reject"
+    else:
+      - id: post-success
+        type: http.request
+        method: POST
+        url: "https://api.notion.com/v1/pages"
+        body: "{{ outputs.initial-draft.response }}"
+
+# Executed if any root task fails and exhausts retries
 onFailure:
-  - id: notify
+  - id: alert-slack
     type: http.request
-    url: "https://alerts.example.com"
+    method: POST
+    url: "https://hooks.slack.com/services/..."
+    body: "Execution failed!"
 ```
 
 ---
@@ -57,18 +83,17 @@ onFailure:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| id | string | Yes | Unique flow identifier |
-| namespace | string | Yes | Logical grouping |
-| description | string | No | Human-readable description |
-| labels | map | No | Key-value tags |
-| inputs | list | No | Input parameters |
-| variables | map | No | Reusable values |
-| triggers | list | No | Auto-start conditions |
-| tasks | list | Yes | Execution steps |
-| onFailure | list | No | Failure handlers |
+| `id` | string | Yes | Unique workflow name (regex: `^[a-z0-9-]+$`). |
+| `namespace` | string | Yes | Dot-separated folder namespace (regex: `^[a-z0-9.-]+$`). |
+| `description` | string | No | Human description of flow. |
+| `labels` | map | No | Tags for filtering execution metrics. |
+| `inputs` | list | No | Request parameters for execution. |
+| `variables` | map | No | Immutable flow-wide variables. |
+| `triggers` | list | No | Event-based trigger triggers. |
+| `tasks` | list | Yes | List of steps to execute sequentially by default. |
+| `onFailure` | list | No | Sequence executed if a flow run fails. |
 
 ### Input Schema
-
 ```yaml
 inputs:
   - id: <string>
@@ -78,121 +103,102 @@ inputs:
     description: <string>
 ```
 
-### Task Schema
-
+### Task Schema (Standard Task Parameters)
 ```yaml
 tasks:
-  - id: <string>           # Required: unique within flow
-    type: <plugin-type>    # Required: plugin identifier
+  - id: <string>           # Required: unique within immediate block
+    type: <plugin-type>    # Required: plugin descriptor (e.g. openai.chat)
     description: <string>  # Optional
-    timeout: <duration>    # Optional: e.g., "30s", "5m"
-    retry:                 # Optional retry config
+    timeout: <duration>    # Optional: e.g. "30s", "10m"
+    retry:                 # Optional retry parameters
       maxAttempts: 3
       backoff: exponential
       initialDelay: "1s"
-    if: <expression>       # Optional: conditional execution
-    # Plugin-specific config follows
+    if: <expression>       # Optional: Skip task dynamically if condition resolves false
 ```
 
 ---
 
-## Expression Syntax
+## Control Flow Task Schemas
 
-Use `{{ }}` for dynamic values:
+Unlike standard worker plugins, control flow tasks structure the execution layout reactively.
 
+### 1. Parallel Task (`core.parallel`)
+Runs all nested tasks concurrently.
 ```yaml
-# Input reference
-"{{ inputs.userQuery }}"
-
-# Variable reference
-"{{ vars.model }}"
-
-# Output from previous task
-"{{ outputs.task1.response }}"
-
-# Built-in functions
-"{{ now() }}"
-"{{ uuid() }}"
-"{{ env('API_KEY') }}"
-
-# Conditionals
-"{{ outputs.task1.score > 0.8 ? 'high' : 'low' }}"
+- id: check-services
+  type: core.parallel
+  tasks:
+    - id: server-a
+      type: http.request
+      url: "https://a.com/health"
+    - id: server-b
+      type: http.request
+      url: "https://b.com/health"
 ```
+*   **Schema:** Requires `tasks` (a nested list of standard Tasks).
+*   **Namespace Resolution:** Nested task outputs are isolated under the parent parallel block to prevent naming collisions:
+    `{{ outputs.check-services.server-a.body }}`
+
+### 2. Conditional Task (`core.if`)
+Branches execution path based on a boolean condition.
+```yaml
+- id: routing-gate
+  type: core.if
+  condition: "{{ outputs.check-services.server-a.statusCode == 200 }}"
+  then:
+    - id: status-ok
+      type: custom.logger
+      message: "Server is green"
+  else:
+    - id: status-error
+      type: custom.logger
+      message: "Server is down"
+```
+*   **Schema:** Requires `condition` (expression resolving to boolean) and `then` (list of tasks). Optional: `else` (list of tasks).
+
+### 3. Loop Task (`core.foreach`)
+Iterates tasks over a list.
+```yaml
+- id: process-users
+  type: core.foreach
+  items: "{{ outputs.get-users.list }}"
+  tasks:
+    - id: notify-user
+      type: http.request
+      url: "https://api.com/user/{{ taskrun.value.id }}/notify"
+```
+*   **Schema:** Requires `items` (expression resolving to a JSON array) and `tasks` (list of tasks executing for each item).
 
 ---
 
-## Complete Examples
+## Expression & Variable Resolution
 
-### Example 1: Simple AI Chain
+All dynamic evaluation in OrchestrAI is enclosed in `{{ }}` brackets and computed using JEXL.
 
-```yaml
-id: research-assistant
-namespace: ai.research
+### Resolution Hierarchy
+*   **Inputs:** `{{ inputs.myParameter }}`
+*   **Variables:** `{{ vars.myVariable }}`
+*   **Outputs:** `{{ outputs.stepId.response }}`
+*   **Nested Outputs (Parallel):** `{{ outputs.parallelParentId.childStepId.response }}`
+*   **Loop Variable:** `{{ taskrun.value }}` (refers to the current element in a loop iteration)
+*   **Built-in Functions:**
+    *   `{{ now() }}` - ISO time string
+    *   `{{ uuid() }}` - Random UUID
+    *   `{{ env('SYS_ENV_VAR') }}` - Retrieves environment variable safely from host context
 
-inputs:
-  - id: topic
-    type: STRING
-    required: true
-
-tasks:
-  - id: research
-    type: openai.chat
-    model: gpt-4
-    prompt: "Research the topic: {{ inputs.topic }}"
-
-  - id: summarize
-    type: anthropic.chat
-    model: claude-3-opus
-    prompt: "Summarize in 3 bullets: {{ outputs.research.response }}"
-
-  - id: save
-    type: http.request
-    method: POST
-    url: "https://api.notion.com/notes"
-    body: "{{ outputs.summarize.response }}"
-```
-
-### Example 2: Parallel + Conditional
+### Secure Secret Resolution Pattern
+To prevent credential leaks in Kafka pipelines, **never use secrets as JEXL expressions** (e.g. `apiKey: "{{ secret('X') }}"` is deprecated). Instead, plugins automatically read API keys directly from the worker environment context, or map custom keys securely:
 
 ```yaml
-id: content-moderator
-namespace: ai.moderation
+# Good: The plugin loads OPENAI_API_KEY securely from context.
+- id: ask-gpt
+  type: openai.chat
+  prompt: "Hello"
 
-inputs:
-  - id: text
-    type: STRING
-
-tasks:
-  - id: parallel-check
-    type: core.parallel
-    tasks:
-      - id: toxicity
-        type: openai.moderation
-        input: "{{ inputs.text }}"
-      - id: spam
-        type: custom.spamDetector
-        input: "{{ inputs.text }}"
-
-  - id: decision
-    type: core.if
-    condition: "{{ outputs.toxicity.flagged || outputs.spam.flagged }}"
-    then:
-      - id: reject
-        type: http.request
-        url: "/api/reject"
-    else:
-      - id: approve
-        type: http.request
-        url: "/api/approve"
+# Good: If you need a custom secret key, pass the KEY REFERENCE, not the secret expression.
+- id: ask-gpt-alt
+  type: openai.chat
+  secretKeyRef: "OPENAI_API_KEY_MARKETING"  # Worker resolves this securely at runtime
+  prompt: "Hello"
 ```
-
----
-
-## Validation Rules
-
-- `id` must be unique within a flow
-- `id` must match regex: `^[a-z0-9-]+$`
-- Task references in expressions must exist
-- Circular dependencies are forbidden
-- Plugin type must be registered
-- Required fields must be provided

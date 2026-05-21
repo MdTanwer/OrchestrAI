@@ -1,0 +1,21 @@
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Build
+target/
+build/
+.gradle/
+bin/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Local reference directories
+kestra/
+
+# OS files
+.DS_Store
+Thumbs.db

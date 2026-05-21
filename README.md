@@ -40,6 +40,7 @@ Full documentation lives in the [`docs/`](./docs/) directory:
 | 11 | [Deployment](./docs/11-deployment.md) | Running OrchestrAI |
 | 12 | [Security](./docs/12-security.md) | Auth and secrets |
 | 13 | [Roadmap](./docs/13-roadmap.md) | Development plan |
+| 14 | [Native Image](./docs/14-native-image.md) | GraalVM native builds |
 
 See also [docs/README.md](./docs/README.md) for the documentation index and quick start.
 

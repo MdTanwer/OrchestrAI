@@ -1,160 +1,146 @@
 # 05 — System Architecture
 
+OrchestrAI utilizes a **fully event-driven, reactive, and stateless orchestration architecture** heavily inspired by Kestra. It is built entirely on top of **Quarkus** and **Apache Kafka**, ensuring extreme throughput, sub-millisecond state transitions, and 100% resilience against component failures.
+
+---
+
 ## High-Level Architecture
+
+The system is split into small, stateless, and horizontally scalable microservices that communicate asynchronously using a transactional event queue (Kafka).
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                      USERS                              │
 │  (Web UI, CLI, API Clients, Webhooks)                   │
 └──────────────────┬──────────────────────────────────────┘
-                   │ HTTPS
+                   │ HTTPS / SSE
                    ▼
 ┌─────────────────────────────────────────────────────────┐
-│                  API SERVER                             │
-│  (Quarkus REST + WebSocket/SSE)                         │
-│  - Flow CRUD                                            │
-│  - Execution control                                    │
-│  - Real-time updates                                    │
+│                  API SERVER (Quarkus)                   │
+│  - Flow CRUD & Validation                               │
+│  - Execution Triggering & SSE Log Streamer              │
 └──────┬────────────────────────────────┬─────────────────┘
        │                                │
        │ writes                         │ publishes
        ▼                                ▼
-┌──────────────────┐         ┌──────────────────────┐
-│   POSTGRESQL     │         │      KAFKA           │
-│  - Flows         │         │  - task-queue        │
-│  - Executions    │         │  - task-results      │
-│  - TaskRuns      │         │  - execution-events  │
-│  - Logs          │         └────────┬─────────────┘
-└──────────────────┘                  │
-                                      │ consumes
-                                      ▼
-                          ┌─────────────────────────┐
-                          │   WORKER NODES          │
-                          │  (Pull tasks, execute)  │
-                          │   ┌─────────────────┐   │
-                          │   │ Plugin Registry │   │
-                          │   │ - OpenAI        │   │
-                          │   │ - Claude        │   │
-                          │   │ - HTTP, etc.    │   │
-                          │   └─────────────────┘   │
-                          └─────────────────────────┘
+┌──────────────────┐         ┌──────────────────────────────┐
+│    DATABASE      │         │     KAFKA EVENT QUEUE        │
+│  (PostgreSQL)    │         │  - executions                │
+│  - Flows         │         │  - task-runs (WorkerTask)    │
+│  - Executions    │         │  - task-results (TaskResult) │
+│  - Secrets       │         │  - task-logs (Structured)    │
+└──────────────────┘         └──────┬────────────────┬──────┘
+                                    │                │
+                                    │ consumes       │ consumes
+                                    ▼                ▼
+                         ┌────────────────────┐   ┌────────────────────┐
+                         │ EXECUTOR (Quarkus) │   │ WORKER (Quarkus)   │
+                         │ - Reactive Engine  │   │ - Stateless Worker │
+                         │ - State Machine    │   │ - Plugin Runner    │
+                         └────────────────────┘   └────────────────────┘
 ```
 
 ---
 
 ## Core Components
 
-### 1. API Server
+All OrchestrAI backend services are built using the **Quarkus** framework, utilizing Mutiny for reactive programming and optimized GraalVM Native Image compilation.
 
-**Tech:** Quarkus + REST + SSE
+### 1. API Server (Quarkus)
+*   **Role:** The entry point for all user interactions.
+*   **Responsibilities:**
+    *   Exposes a high-performance REST API for managing flows, triggering executions, and registering custom plugins.
+    *   Validates flow YAML structures against registered plugin schemas.
+    *   Publishes execution requests to the `executions` Kafka queue.
+    *   Subscribes directly to the `task-logs` Kafka topic to stream real-time execution logs directly to users via **Server-Sent Events (SSE)**, completely bypassing PostgreSQL for streaming reads.
 
-**Responsibilities:**
+### 2. The Executor (Quarkus Core Engine)
+*   **Role:** The centralized, reactive "brain" of the platform.
+*   **Design:** Inspired by Kestra's core runner, the Executor is **entirely stateless** and reactive. It holds **no state in JVM memory** and blocks **zero threads** while waiting for tasks.
+*   **Responsibilities:**
+    *   Listens to the `executions` and `task-results` Kafka queues.
+    *   Upon consuming a completion event, it locks the execution record in the database, runs pure state transitions, and resolves expressions for subsequent steps.
+    *   Determines which tasks are ready to run next and dispatches them as events to the `task-runs` queue.
+    *   If a task or flow fails, the Executor processes retries, timeouts, or `onFailure` fallback logic in a stateless manner.
+    *   If all tasks succeed, it updates the execution state to `SUCCESS` in the database and terminates the event loop.
 
-- Accept HTTP requests
-- Validate flows
-- Create executions
-- Publish tasks to Kafka
-- Stream logs via SSE
+### 3. Worker Nodes (Quarkus Worker)
+*   **Role:** The horizontal task executors.
+*   **Design:** Completely stateless runner. Workers do **not** have direct database connections (PostgreSQL) and have **no knowledge of the overall flow structure**.
+*   **Responsibilities:**
+    *   Consume single task execution payloads (`TaskRun`) from the `task-runs` Kafka queue.
+    *   Instantiate the appropriate plugin (e.g., `openai.chat`, `http.request`).
+    *   Execute the task inside a sandbox environment using the `Plugin.execute()` SDK.
+    *   Publish task outputs, token metrics, and cost metrics to the `task-results` queue.
+    *   Publish real-time task logs as structured JSON events to the `task-logs` queue.
 
-### 2. Scheduler
-
-**Tech:** Quartz / custom scheduler
-
-**Responsibilities:**
-
-- Evaluate cron triggers
-- Watch for webhook triggers
-- Create executions on schedule
-
-### 3. Execution Engine
-
-**Tech:** Java + Kafka
-
-**Responsibilities:**
-
-- Manage execution state
-- Resolve task dependencies
-- Dispatch tasks to workers
-- Aggregate results
-
-### 4. Worker Nodes
-
-**Tech:** Java + Plugin SDK
-
-**Responsibilities:**
-
-- Consume tasks from Kafka
-- Load appropriate plugin
-- Execute task
-- Publish results
-
-### 5. Plugin System
-
-**Tech:** Java Reflection + ServiceLoader
-
-**Responsibilities:**
-
-- Discover plugins at startup
-- Provide isolated execution context
-- Handle inputs and outputs
-
-### 6. Storage Layer
-
-**Tech:** PostgreSQL + Hibernate
-
-**Responsibilities:**
-
-- Persist flows, executions, logs
-- Provide history and search
-
-### 7. Web Dashboard
-
-**Tech:** Next.js + React
-
-**Responsibilities:**
-
-- Flow editor (YAML)
-- Execution viewer
-- Real-time logs
-- Metrics dashboard
+### 4. The Scheduler (Quarkus Scheduler)
+*   **Role:** Time-based trigger monitor.
+*   **Responsibilities:**
+    *   Watches registered Flow YAML definitions for `schedule.cron` triggers.
+    *   Evaluates scheduling constraints.
+    *   Publishes newly triggered execution templates directly into the `executions` Kafka queue.
 
 ---
 
-## Data Flow Example
+## Data Flow Sequence (Event-Driven Execution)
 
-**User runs a flow:**
+To execute a workflow, OrchestrAI orchestrates state entirely through asynchronous event loops:
 
-1. User → `POST /api/flows/{id}/execute`
-2. API Server → Validates flow, creates Execution in DB (state: CREATED)
-3. API Server → Publishes first task to Kafka topic `task-queue`
-4. API Server → Returns `executionId` to user
-5. Worker → Consumes task from Kafka
-6. Worker → Loads plugin (e.g., `openai.chat`)
-7. Worker → Executes task, gets result
-8. Worker → Publishes result to `task-results`
-9. Execution Engine → Updates DB, publishes next task
-10. Repeats until all tasks done
-11. Execution Engine → Marks execution SUCCESS
-12. SSE → Pushes update to UI
+```
+ User      API Server       Kafka Topics       Stateless Executor     Worker Node
+  │            │                 │                     │                   │
+  │─── POST ──►│                 │                     │                   │
+  │  (Execute) │─── Publish ────►│                     │                   │
+  │            │  (executions)   │                     │                   │
+  │◄── 202 ────│                 │                     │                   │
+  │ (Accepted) │                 │◄─── Consume Event ──│                   │
+  │            │                 │     (executions)    │                   │
+  │            │                 │                     │                   │
+  │            │                 │─── Publish Task ───►│                   │
+  │            │                 │    (task-runs)      │                   │
+  │            │                 │                     │◄── Consume Task ──│
+  │            │                 │                     │    (task-runs)    │
+  │            │                 │                     │                   │
+  │            │                 │                     │                   │── Execute task
+  │            │                 │                     │                   │── Emit logs
+  │            │                 │◄─── Publish Logs ───┼───────────────────│
+  │            │                 │     (task-logs)     │                   │
+  │            │◄── Consume ─────│                     │                   │
+  │            │    (task-logs)  │                     │                   │
+  │◄─── SSE ───│                 │                     │                   │
+  │  (Log)     │                 │                     │                   │
+  │            │                 │◄─── Publish Result ─┼───────────────────│
+  │            │                 │     (task-results)  │                   │
+  │            │                 │                     │                   │
+  │            │                 │◄─── Consume Result ─│                   │
+  │            │                 │     (task-results)  │                   │
+  │            │                 │                     │                   │
+  │            │                 │─── Publish Next ───►│                   │
+  │            │                 │    (task-runs)      │                   │
+```
 
 ---
 
-## Kafka Topics
+## Kafka Queue Topics & Schema
 
-| Topic | Purpose | Producer | Consumer |
-|-------|---------|----------|----------|
-| `task-queue` | Pending tasks | API / Engine | Workers |
-| `task-results` | Completed tasks | Workers | Engine |
-| `execution-events` | State changes | Engine | API (for SSE) |
-| `dead-letter` | Failed tasks | Workers | Manual review |
+All queues are implemented as highly partitionable Kafka topics:
+
+| Topic | Event Payload | Producer | Consumer | Description |
+|-------|---------------|----------|----------|-------------|
+| `executions` | `Execution` | API / Scheduler | Executor | Starts a new execution or triggers a manual resume. |
+| `task-runs` | `TaskRun` | Executor | Workers | Standard worker tasks distributed across workers. |
+| `task-results` | `TaskResult` | Workers | Executor | Completion status, outputs, token metrics, and costs. |
+| `task-logs` | `LogEntry` | Workers | API Server | Structured real-time execution logs for SSE streaming. |
+| `execution-events` | `ExecutionEvent` | Executor | API Server | Live execution state transitions for dashboard metrics. |
+| `dead-letter` | `TaskRun` | Workers | Operations | Failed tasks after exhaustion of all retry attempts. |
 
 ---
 
-## Design Principles
+## Design Principles (Inspired by Kestra)
 
-1. **Stateless Workers** — Any worker can execute any task
-2. **Idempotent Tasks** — Safe to retry
-3. **Event-Driven** — Kafka decouples components
-4. **Plugin-First** — All capabilities are plugins
-5. **Observable** — Every action emits events
-6. **Horizontal Scalability** — Add workers to scale
+1.  **Strict Statelessness:** Workers and Executors maintain zero in-memory execution state. If any node dies, another node picks up the partition and continues seamlessly.
+2.  **Zero-Thread-Blocking:** The Executor never blocks a thread waiting for Kafka responses. Every transition is triggered by a fresh message consumed from a topic.
+3.  **Late Secrets Injection:** Workers resolve credentials from dynamic context managers at execution time, preventing secrets from passing through database logs or Kafka queues in plaintext.
+4.  **Bulk Log Buffering:** Workers pipe logs as structured events over Kafka. The DB is decoupled from high-throughput worker logs, saving transactional performance.
+5.  **GraalVM Friendly:** Eliminating dynamic runtime reflection and standardizing on build-time metadata registry ensures 100% compatibility with Native compilation.

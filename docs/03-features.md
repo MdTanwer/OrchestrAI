@@ -128,6 +128,10 @@ Daily and monthly cost breakdown per flow.
 
 Track who triggered what and when.
 
+### F4.6 — Task Input/Output Visibility
+
+Per TaskRun: inputs, outputs, duration, state, errors, token usage, and cost — visible in the dashboard and via the REST API / SSE stream for debugging and compliance.
+
 ---
 
 ## 5. Integration
