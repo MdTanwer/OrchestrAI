@@ -1,160 +1,164 @@
-# Plugin System
+# 08 — Plugin System
 
-## Overview
+## What is a Plugin?
 
-The Plugin System allows extending OrchestrAI's functionality through custom plugins. Plugins can add new integrations, transformers, validators, or custom execution logic.
+A plugin is a self-contained Java class that implements a Task type. It defines:
 
-## Plugin Architecture
+- Configuration schema
+- Execution logic
+- Output structure
 
-### Plugin Types
+---
 
-#### Integration Plugins
-Connect to external services and APIs.
-- Examples: Slack, GitHub, AWS, Stripe
-- Capabilities: Authentication, API calls, webhooks
+## Plugin Interface
 
-#### Transformer Plugins
-Transform data between formats.
-- Examples: JSON to XML, CSV parsing, data normalization
-- Capabilities: Schema mapping, data validation
+```java
+public interface Plugin<C extends PluginConfig, O extends PluginOutput> {
 
-#### Validator Plugins
-Validate data against rules or schemas.
-- Examples: JSON Schema, custom business rules
-- Capabilities: Rule definition, error reporting
+    String type();                    // e.g., "openai.chat"
 
-#### Executor Plugins
-Custom execution logic for specific use cases.
-- Examples: Custom AI models, specialized processing
-- Capabilities: Custom step types, runtime behavior
+    String version();                 // e.g., "1.0.0"
 
-## Plugin Development
+    Class<C> configClass();
 
-### Plugin Structure
-
-```yaml
-# plugin.yaml
-name: my-plugin
-version: "1.0.0"
-type: integration
-description: My custom plugin
-author: Your Name
-dependencies:
-  - other-plugin: ">=1.0"
-config_schema:
-  api_key:
-    type: string
-    required: true
-  endpoint:
-    type: string
-    default: "https://api.example.com"
+    O execute(C config, ExecutionContext ctx) throws PluginException;
+}
 ```
 
-### Plugin Interface
+---
 
-```python
-from orchestrAI.plugin import Plugin, PluginContext
+## Plugin Lifecycle
 
-class MyPlugin(Plugin):
-    def __init__(self, config: dict):
-        self.config = config
-        self.client = self._init_client()
-    
-    def execute(self, context: PluginContext) -> dict:
-        # Execute plugin logic
-        result = self.client.call(context.input)
-        return {"output": result}
-    
-    def validate_config(self, config: dict) -> bool:
-        # Validate plugin configuration
-        return "api_key" in config
+1. Worker starts
+2. ServiceLoader discovers plugins (`META-INF/services`)
+3. Plugins register with PluginRegistry
+4. Worker receives task from Kafka
+5. Registry looks up plugin by type
+6. Plugin config is deserialized from JSON
+7. `Plugin.execute()` is called
+8. Output is serialized and published
+
+---
+
+## Example Plugin: OpenAI Chat
+
+```java
+@PluginType("openai.chat")
+public class OpenAiChatPlugin implements Plugin<OpenAiChatConfig, OpenAiChatOutput> {
+
+    @Override
+    public String type() {
+        return "openai.chat";
+    }
+
+    @Override
+    public String version() {
+        return "1.0.0";
+    }
+
+    @Override
+    public Class<OpenAiChatConfig> configClass() {
+        return OpenAiChatConfig.class;
+    }
+
+    @Override
+    public OpenAiChatOutput execute(OpenAiChatConfig config, ExecutionContext ctx) {
+        String apiKey = ctx.getSecret("OPENAI_API_KEY");
+
+        OpenAiClient client = new OpenAiClient(apiKey);
+        ChatResponse response = client.chat(
+            config.getModel(),
+            config.getPrompt(),
+            config.getTemperature()
+        );
+
+        return OpenAiChatOutput.builder()
+            .response(response.text())
+            .tokensUsed(response.tokens())
+            .costUsd(calculateCost(response.tokens(), config.getModel()))
+            .build();
+    }
+}
 ```
 
-### Plugin Lifecycle
+### Config Class
 
-1. **Discovery**: System scans plugin directories
-2. **Loading**: Plugin code is loaded into memory
-3. **Validation**: Configuration and dependencies are validated
-4. **Initialization**: Plugin instances are created
-5. **Execution**: Plugin is invoked during workflow execution
-6. **Cleanup**: Resources are released on shutdown
-
-## Plugin API
-
-### Context Object
-The context object provides access to execution environment:
-
-```python
-class PluginContext:
-    input: dict              # Step input data
-    output: dict             # Step output data
-    config: dict             # Plugin configuration
-    secrets: dict            # Access to secrets
-    logger: Logger           # Logging interface
-    metadata: dict           # Execution metadata
+```java
+public class OpenAiChatConfig implements PluginConfig {
+    @NotNull private String model;
+    @NotNull private String prompt;
+    private Double temperature = 0.7;
+    private Integer maxTokens = 2000;
+}
 ```
 
-### Plugin Methods
+### Output Class
 
-#### execute(context: PluginContext) -> dict
-Main execution method. Returns output data.
-
-#### validate_config(config: dict) -> bool
-Validate plugin configuration before initialization.
-
-#### on_init() -> None
-Called after successful initialization.
-
-#### on_shutdown() -> None
-Called before plugin shutdown for cleanup.
-
-## Plugin Distribution
-
-### Plugin Registry
-- Central repository for plugins
-- Version management
-- Dependency resolution
-- Security scanning
-
-### Installation Methods
-
-#### From Registry
-```bash
-orchestrai plugin install my-plugin
+```java
+public class OpenAiChatOutput implements PluginOutput {
+    private String response;
+    private Integer tokensUsed;
+    private BigDecimal costUsd;
+}
 ```
 
-#### From Local File
-```bash
-orchestrai plugin install ./my-plugin.zip
-```
+---
 
-#### From Git Repository
-```bash
-orchestrai plugin install https://github.com/user/my-plugin
-```
+## Built-in Plugins
 
-## Best Practices
+### Core Plugins
 
-### Security
-- Never hardcode secrets
-- Validate all inputs
-- Use secure communication
-- Follow principle of least privilege
+| Type | Description |
+|------|-------------|
+| core.if | Conditional branching |
+| core.parallel | Parallel execution |
+| core.foreach | Iteration |
+| core.delay | Sleep |
+| core.set | Set variable |
 
-### Performance
-- Cache expensive operations
-- Use connection pooling
-- Implement proper error handling
-- Add appropriate logging
+### AI Plugins
 
-### Compatibility
-- Specify dependency versions
-- Test with multiple OrchestrAI versions
-- Provide migration guides
-- Document breaking changes
+| Type | Description |
+|------|-------------|
+| openai.chat | OpenAI chat completion |
+| openai.embedding | OpenAI embeddings |
+| anthropic.chat | Claude chat |
+| google.gemini | Gemini |
+| ollama.chat | Local LLM |
 
-### Documentation
-- Clear installation instructions
-- Configuration examples
-- API documentation
-- Troubleshooting guide
+### Integration Plugins
+
+| Type | Description |
+|------|-------------|
+| http.request | HTTP call |
+| shell.exec | Shell command |
+| kafka.produce | Publish to Kafka |
+| postgres.query | SQL query |
+| s3.upload | Upload to S3 |
+
+### Human Plugins
+
+| Type | Description |
+|------|-------------|
+| human.approval | Pause for approval |
+| human.input | Pause for input |
+
+---
+
+## Plugin Validation
+
+Each plugin's config is validated using:
+
+- Bean Validation (`@NotNull`, `@Min`, etc.)
+- JSON Schema (auto-generated from class)
+- Custom validators
+
+---
+
+## Distribution
+
+Plugins are packaged as JAR files and:
+
+- Bundled with worker (built-in)
+- Loaded from `/plugins` directory (custom)
+- Hot-reloadable (future)

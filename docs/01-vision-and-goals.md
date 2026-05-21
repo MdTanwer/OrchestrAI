@@ -1,41 +1,83 @@
-# Vision and Goals
+# 01 — Vision & Goals
 
-## Vision
+## Vision Statement
 
-To democratize AI-powered automation by providing an accessible, powerful, and secure orchestration platform that enables organizations of all sizes to leverage the full potential of AI agents.
+> "To become the default orchestration layer for production AI agents — as essential as Kubernetes is for containers."
 
-## Mission
+---
 
-Build an open, extensible framework that simplifies the creation and management of AI workflows while maintaining enterprise-grade reliability and security.
+## Primary Goals
 
-## Core Goals
+### Goal 1: Simplicity
 
-### 1. Accessibility
-- Make AI automation accessible to developers and non-technical users alike
-- Provide intuitive configuration options
-- Support multiple skill levels and use cases
+Make AI workflows definable in under 20 lines of YAML.
 
-### 2. Flexibility
-- Support diverse AI models and providers
-- Enable custom plugin development
-- Adapt to various deployment environments
+### Goal 2: Reliability
 
-### 3. Reliability
-- Ensure consistent execution of workflows
-- Provide robust error handling and recovery
-- Maintain high availability for critical operations
+99.9% execution reliability with retries and fallbacks.
 
-### 4. Security
-- Implement enterprise security standards
-- Provide fine-grained access controls
-- Ensure data privacy and compliance
+### Goal 3: Observability
 
-### 5. Performance
-- Optimize for low-latency execution
-- Scale efficiently with workload demands
-- Minimize resource consumption
+Every token, every decision, every cost — visible and traceable.
 
-### 6. Community
-- Foster an open-source ecosystem
-- Encourage contributions and extensions
-- Build comprehensive documentation and examples
+### Goal 4: Extensibility
+
+Anyone can write a plugin in 30 minutes.
+
+### Goal 5: Performance
+
+Execute 1000+ concurrent workflows on a single node.
+
+---
+
+## What We ARE Building (In Scope)
+
+| Feature | Priority |
+|---------|----------|
+| YAML-based flow definitions | P0 |
+| Multi-LLM plugin system | P0 |
+| Kafka-based distributed execution | P0 |
+| REST API for flow management | P0 |
+| Web dashboard for monitoring | P0 |
+| Cron and webhook triggers | P1 |
+| Token and cost tracking | P1 |
+| Retry and fallback strategies | P1 |
+| Human-in-the-loop tasks | P2 |
+| Shared memory between agents | P2 |
+
+---
+
+## What We Are NOT Building (Out of Scope)
+
+| Feature | Reason |
+|---------|--------|
+| Custom LLM training | Not our domain |
+| Vector database | Use existing (Pinecone, Weaviate) |
+| Drag-and-drop visual editor | Phase 2 (post-MVP) |
+| Mobile app | Not needed for target users |
+| Marketplace for flows | Phase 2 |
+| Built-in IDE | Use existing editors |
+
+---
+
+## Success Criteria (MVP)
+
+- [ ] Execute a 5-step AI workflow end-to-end
+- [ ] Support OpenAI, Claude, and Gemini plugins
+- [ ] Handle 100 concurrent executions
+- [ ] Real-time log streaming to dashboard
+- [ ] Deployable via Docker Compose
+- [ ] 80%+ unit test coverage
+- [ ] Complete documentation
+- [ ] Open-source on GitHub
+
+---
+
+## Personal Goals (Author)
+
+This project is being built to:
+
+1. Demonstrate **senior-level engineering** skills
+2. Showcase mastery of **distributed systems**
+3. Build a **portfolio piece** for career growth
+4. Contribute to the **open-source community**

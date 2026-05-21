@@ -1,188 +1,183 @@
-# AI Agents
+# 09 — AI Agents
 
-## Overview
+## What is an AI Agent in OrchestrAI?
 
-AI Agents are autonomous entities that can perform tasks, make decisions, and interact with other agents or systems. OrchestrAI provides a flexible framework for managing and coordinating AI agents within workflows.
+An **AI Agent** is a Task that uses an LLM to make decisions, generate content, or call tools. Agents are first-class citizens in OrchestrAI.
 
-## Agent Types
+---
 
-### LLM Agents
-Powered by Large Language Models for natural language understanding and generation.
+## Agent Capabilities
 
-**Capabilities:**
-- Text generation and analysis
-- Code generation and review
-- Question answering
-- Summarization
-- Translation
+### 1. Chat Completion
 
-**Configuration:**
-```yaml
-name: llm-agent
-type: llm
-model: gpt-4
-system_prompt: You are a helpful assistant
-temperature: 0.7
-max_tokens: 2000
-```
+Standard LLM call with prompt → response.
 
-### Custom Agents
-User-defined agents with custom logic and behavior.
+### 2. Tool Calling
 
-**Capabilities:**
-- Custom decision-making
-- Specialized domain knowledge
-- Integration with external systems
-- Custom tool usage
+LLM decides which tools to invoke.
 
-**Configuration:**
-```yaml
-name: custom-agent
-type: custom
-implementation: my_custom_agent.CustomAgent
-config:
-  knowledge_base: ./knowledge
-  tools:
-    - calculator
-    - search
-```
+### 3. Multi-turn Conversation
 
-### Hybrid Agents
-Combine LLM capabilities with custom logic for enhanced functionality.
+Stateful chat with memory.
 
-**Capabilities:**
-- LLM for natural language
-- Custom logic for structured tasks
-- Tool integration
-- Multi-step reasoning
+### 4. RAG (Retrieval Augmented Generation)
 
-## Agent Configuration
+Search documents → inject into prompt.
 
-### Model Selection
-- **Model Provider**: OpenAI, Anthropic, HuggingFace, custom
-- **Model Version**: Specific model version to use
-- **Parameters**: Temperature, top-p, frequency penalty
+### 5. Streaming
 
-### System Prompt
-Defines the agent's behavior and personality:
-```yaml
-system_prompt: |
-  You are a data analyst specializing in financial reports.
-  Always provide citations for your data sources.
-  Be concise and focus on actionable insights.
-```
+Stream tokens as they're generated.
 
-### Tools
-Agents can use tools to extend their capabilities:
-```yaml
-tools:
-  - name: calculator
-    type: function
-    description: Perform mathematical calculations
-  - name: search
-    type: api
-    endpoint: https://api.search.com
-  - name: database
-    type: integration
-    plugin: postgres-plugin
-```
+---
 
-### Memory
-Agents can maintain context across interactions:
-```yaml
-memory:
-  type: vector_store
-  store: chromadb
-  max_messages: 100
-  retention: 7d
-```
+## Cost & Token Tracking
 
-## Agent Communication
+Every AI plugin reports:
 
-### Agent-to-Agent
-Agents can communicate directly with each other:
-```yaml
-workflow:
-  steps:
-    - id: agent-1
-      type: agent
-      agent: researcher
-      output_to: agent-2
-    
-    - id: agent-2
-      type: agent
-      agent: writer
-      input_from: agent-1
-```
-
-### Message Protocol
-Standardized message format for agent communication:
-```yaml
+```json
 {
-  "from": "agent-id",
-  "to": "agent-id",
-  "type": "request|response|notification",
-  "content": "message content",
-  "metadata": {}
+  "tokensUsed": 1523,
+  "promptTokens": 245,
+  "completionTokens": 1278,
+  "costUsd": 0.04569,
+  "model": "gpt-4"
 }
 ```
 
-### Coordination Patterns
+Costs are aggregated at the execution level.
 
-#### Sequential
-Agents pass results in a chain.
+---
 
-#### Parallel
-Multiple agents work independently on subtasks.
+## Model Fallback Pattern
 
-#### Hierarchical
-Manager agent delegates to worker agents.
+```yaml
+- id: ai-task
+  type: ai.chat
+  primary:
+    provider: openai
+    model: gpt-4
+  fallback:
+    - provider: anthropic
+      model: claude-3-opus
+    - provider: google
+      model: gemini-pro
+  fallbackOn:
+    - RATE_LIMIT
+    - TIMEOUT
+    - PROVIDER_ERROR
+```
 
-#### Collaborative
-Agents work together on shared tasks.
+---
 
-## Agent Lifecycle
+## Shared Context Between Agents
 
-### Initialization
-1. Load agent configuration
-2. Initialize model connection
-3. Load tools and memory
-4. Validate capabilities
+Agents in the same execution can share memory:
 
-### Execution
-1. Receive task or message
-2. Process using model and tools
-3. Generate response or action
-4. Update memory if needed
-5. Return result
+```yaml
+tasks:
+  - id: agent1
+    type: openai.chat
+    contextKey: "conversation"
+    prompt: "User: {{ inputs.query }}"
 
-### Termination
-1. Save final state
-2. Release resources
-3. Archive memory if configured
+  - id: agent2
+    type: anthropic.chat
+    contextKey: "conversation"  # same context
+    prompt: "Continue from previous"
+```
 
-## Best Practices
+Behind the scenes, `contextKey` stores conversation history.
 
-### Prompt Engineering
-- Be specific and clear
-- Provide examples
-- Define output format
-- Set appropriate constraints
+---
 
-### Tool Design
-- Keep tools focused
-- Provide clear descriptions
-- Handle errors gracefully
-- Document usage patterns
+## Human-in-the-Loop
 
-### Memory Management
-- Set appropriate retention policies
-- Regularly clean old data
-- Use efficient storage
-- Monitor memory usage
+```yaml
+- id: review
+  type: human.approval
+  message: "Approve this content?"
+  data: "{{ outputs.generate.response }}"
+  approvers:
+    - user@example.com
+  timeout: "24h"
+  onTimeout: REJECT
 
-### Performance
-- Cache model responses
-- Batch similar requests
-- Use streaming for long outputs
-- Monitor token usage
+- id: publish
+  type: http.request
+  if: "{{ outputs.review.approved }}"
+  url: "/api/publish"
+```
+
+Execution pauses at `human.approval` and resumes on user action.
+
+---
+
+## Tool Calling Pattern
+
+```yaml
+- id: agent-with-tools
+  type: openai.chat
+  model: gpt-4
+  prompt: "{{ inputs.userQuery }}"
+  tools:
+    - name: searchWeb
+      description: "Search the web"
+      type: http.request
+      url: "https://api.search.com"
+    - name: queryDb
+      description: "Query database"
+      type: postgres.query
+      sql: "SELECT * FROM users WHERE..."
+```
+
+The LLM decides which tool to call; the engine executes the tool and returns the result.
+
+---
+
+## Prompt Templates
+
+```yaml
+variables:
+  systemPrompt: |
+    You are a helpful AI assistant.
+    Always respond in JSON format.
+    Be concise.
+
+tasks:
+  - id: chat
+    type: openai.chat
+    system: "{{ vars.systemPrompt }}"
+    prompt: "{{ inputs.query }}"
+```
+
+---
+
+## Multi-Agent Patterns
+
+### Pattern 1: Sequential Chain
+
+```
+Agent A → Agent B → Agent C
+```
+
+### Pattern 2: Parallel Aggregation
+
+```
+       ┌─ Agent A ─┐
+Input →├─ Agent B ─┼→ Aggregator → Output
+       └─ Agent C ─┘
+```
+
+### Pattern 3: Router
+
+```
+              ┌─ Agent A (if topic=tech)
+Input → Router├─ Agent B (if topic=business)
+              └─ Agent C (if topic=other)
+```
+
+### Pattern 4: Refiner
+
+```
+Generator → Critic → Generator → Critic → Final
+```

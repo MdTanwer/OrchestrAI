@@ -1,162 +1,199 @@
-# Roadmap
+# 13 — Roadmap
 
-## Vision
+## 12-Week MVP Plan
 
-To become the leading open-source platform for AI-powered workflow automation, enabling organizations of all sizes to leverage AI agents effectively.
+---
 
-## Current Focus (Q1 2024)
+### Week 1–2: Foundation
 
-### Core Platform
-- [x] Basic workflow execution engine
-- [x] YAML schema definition
-- [x] REST API
-- [ ] GraphQL API (in progress)
-- [ ] Webhook system (in progress)
+**Goal:** Project skeleton + YAML parser working
 
-### AI Agents
-- [x] LLM agent integration
-- [ ] Multi-agent coordination (in progress)
-- [ ] Agent memory system (planned)
-- [ ] Custom agent framework (planned)
+**Tasks:**
 
-### Developer Experience
-- [x] CLI tools
-- [ ] Python SDK (in progress)
-- [ ] JavaScript SDK (planned)
-- [ ] Testing framework (planned)
+- [ ] Setup multi-module Maven project
+- [ ] Configure Quarkus for API server
+- [ ] Define all domain model classes
+- [ ] Implement YAML parser (Jackson YAML)
+- [ ] Write Flow validation logic
+- [ ] Unit tests for parser (80%+ coverage)
+- [ ] Setup PostgreSQL schema + Flyway migrations
+- [ ] Configure Docker Compose (Postgres + Kafka)
 
-## Short Term (Q2 2024)
+**Deliverable:** Parse and validate a YAML flow file
 
-### Features
-- [ ] Conditional workflow execution
-- [ ] Loop and iteration support
-- [ ] Parallel step execution
-- [ ] Error handling and retries
-- [ ] Workflow versioning
+---
 
-### Integrations
-- [ ] Slack plugin
-- [ ] GitHub plugin
-- [ ] Email plugin
-- [ ] Database plugins (PostgreSQL, MySQL)
-- [ ] Cloud storage plugins (S3, GCS)
+### Week 3–4: Core Execution Engine
 
-### Monitoring
-- [ ] Real-time execution monitoring
-- [ ] Performance metrics
-- [ ] Custom dashboards
-- [ ] Alert system
+**Goal:** Execute a basic flow end-to-end
 
-### Security
-- [ ] Role-based access control
-- [ ] Secret management
-- [ ] Audit logging
-- [ ] API key rotation
+**Tasks:**
 
-## Medium Term (Q3-Q4 2024)
+- [ ] Implement Execution state machine
+- [ ] Build expression resolver (JEXL)
+- [ ] Create sequential task executor
+- [ ] Implement retry logic
+- [ ] Build execution context (inputs/outputs/variables)
+- [ ] Persist executions + task runs to DB
+- [ ] Unit + integration tests
 
-### Advanced Features
-- [ ] Workflow templates marketplace
-- [ ] Visual workflow builder
-- [ ] Workflow debugging tools
-- [ ] A/B testing for workflows
-- [ ] Workflow analytics
+**Deliverable:** Run a 3-task flow and see results in DB
 
-### AI Enhancements
-- [ ] Agent training and fine-tuning
-- [ ] Custom model integration
-- [ ] Agent performance tracking
-- [ ] Auto-optimization of workflows
-- [ ] Multi-modal agent support
+---
 
-### Enterprise Features
-- [ ] SSO integration (SAML, OIDC)
-- [ ] Team management
-- [ ] Resource quotas
-- [ ] Multi-tenancy support
-- [ ] Advanced compliance features
+### Week 5–6: Kafka Integration
 
-### Performance
-- [ ] Distributed execution
-- [ ] Horizontal scaling
-- [ ] Caching layer optimization
-- [ ] Database sharding
-- [ ] Edge deployment support
+**Goal:** Distributed task execution
 
-## Long Term (2025)
+**Tasks:**
 
-### Ecosystem
-- [ ] Plugin marketplace
-- [ ] Community-contributed workflows
-- [ ] Partner integrations
-- [ ] Certification program
-- [ ] Professional services
+- [ ] Setup Kafka topics
+- [ ] Implement Kafka producer (API → Worker)
+- [ ] Implement Kafka consumer (Worker)
+- [ ] Build Worker Node service
+- [ ] Plugin SDK interface
+- [ ] Idempotency + at-least-once delivery
+- [ ] Dead letter queue handling
+- [ ] Multi-worker test (2 workers, parallel tasks)
 
-### Advanced AI
-- [ ] Autonomous workflow generation
-- [ ] Self-healing workflows
-- [ ] Predictive scaling
-- [ ] Natural language workflow definition
-- [ ] AI-powered optimization
+**Deliverable:** Tasks distributed across multiple workers
 
-### Platform
-- [ ] Mobile app
-- [ ] Desktop application
-- [ ] On-premise deployment
-- [ ] Hybrid cloud support
-- [ ] Serverless offering
+---
 
-## Community Goals
+### Week 7: AI Plugins
 
-### Documentation
-- [ ] Comprehensive tutorials
-- [ ] Video tutorials
-- [ ] Interactive examples
-- [ ] Best practices guide
-- [ ] Troubleshooting guide
+**Goal:** Real LLM calls working
 
-### Contribution
-- [ ] Contributor guidelines
-- [ ] Code of conduct
-- [ ] Issue templates
-- [ ] PR templates
-- [ ] Recognition program
+**Tasks:**
 
-### Events
-- [ ] Monthly community calls
-- [ ] Annual conference
-- [ ] Hackathons
-- [ ] Workshops
-- [ ] Office hours
+- [ ] Implement `openai.chat` plugin
+- [ ] Implement `anthropic.chat` plugin
+- [ ] Implement `google.gemini` plugin
+- [ ] Token + cost tracking
+- [ ] Model fallback logic
+- [ ] Secret injection for API keys
+- [ ] Test with real API calls
 
-## Technology Stack Evolution
+**Deliverable:** Multi-LLM flow running with cost tracking
 
-### Current
-- Python 3.11+
-- PostgreSQL 15
-- Redis 7
-- Docker/Kubernetes
+---
 
-### Planned
-- Rust for performance-critical components
-- GraphQL federation
-- gRPC for internal services
-- WASM for sandboxed plugins
+### Week 8: Integration Plugins + Triggers
 
-## Feedback and Contributions
+**Goal:** Connect to external systems
 
-We welcome feedback and contributions from the community. Please:
-- Open GitHub issues for bugs and feature requests
-- Submit pull requests for improvements
-- Join our Discord community
-- Follow us on Twitter/X
-- Subscribe to our newsletter
+**Tasks:**
 
-## Disclaimer
+- [ ] Implement `http.request` plugin
+- [ ] Implement `core.parallel` plugin
+- [ ] Implement `core.if` plugin
+- [ ] Build cron scheduler (Quartz)
+- [ ] Build webhook trigger endpoint
+- [ ] Manual trigger via API
 
-This roadmap is a living document and may change based on:
-- Community feedback
-- Market conditions
-- Technical discoveries
-- Resource availability
-- Strategic priorities
+**Deliverable:** Webhook triggers a flow; parallel tasks work
+
+---
+
+### Week 9–10: REST API + Persistence
+
+**Goal:** Full API working, data persisted
+
+**Tasks:**
+
+- [ ] Flow CRUD endpoints
+- [ ] Execution endpoints
+- [ ] Log endpoints + SSE streaming
+- [ ] Secrets management API
+- [ ] Metrics endpoints
+- [ ] API authentication (JWT)
+- [ ] RBAC implementation
+- [ ] API validation + error handling
+- [ ] Postman collection
+
+**Deliverable:** Full REST API documented and tested
+
+---
+
+### Week 11: Web Dashboard (UI)
+
+**Goal:** Visual interface working
+
+**Tasks:**
+
+- [ ] Setup Next.js project
+- [ ] Flow list + YAML editor
+- [ ] Execution trigger + history
+- [ ] Real-time log viewer (SSE)
+- [ ] Cost dashboard
+- [ ] Plugin catalog page
+- [ ] Basic auth UI (login)
+
+**Deliverable:** Full dashboard working locally
+
+---
+
+### Week 12: Polish + Launch
+
+**Goal:** Production-ready, public launch
+
+**Tasks:**
+
+- [ ] End-to-end integration tests
+- [ ] Performance testing (100 concurrent flows)
+- [ ] Security review
+- [ ] Complete all documentation
+- [ ] GitHub README with screenshots/GIFs
+- [ ] Docker Compose one-command setup
+- [ ] Record demo video
+- [ ] Publish on GitHub
+- [ ] Post on LinkedIn
+
+**Deliverable:** Public GitHub repo, demo video, LinkedIn post
+
+---
+
+## Post-MVP (Phase 2)
+
+| Feature | Why |
+|---------|-----|
+| Visual flow editor (drag-and-drop) | Better UX |
+| Flow marketplace | Share flows |
+| Kubernetes operator | Enterprise deployment |
+| gRPC support | Performance |
+| LangChain integration | Python interop |
+| Multi-tenant SaaS | Commercial path |
+| OpenTelemetry tracing | Observability |
+| Flow testing framework | Quality |
+| Custom plugin marketplace | Community |
+| GraphQL API | Flexible queries |
+
+---
+
+## Career Milestones (Personal)
+
+| Week | Career Action |
+|------|---------------|
+| 1 | Post on LinkedIn: "I'm building an AI orchestration platform" |
+| 2 | Share architecture diagram |
+| 4 | Share first working execution demo |
+| 6 | Post Kafka distributed execution deep-dive |
+| 8 | Share AI plugin demo (GPT + Claude) |
+| 10 | Share API design decisions |
+| 12 | Full launch post — GitHub, demo video |
+| 12+ | Start applying for Senior Java/Backend roles |
+| 12+ | Use project as system design interview example |
+
+---
+
+## Success Metrics
+
+| Metric | Target |
+|--------|--------|
+| GitHub Stars | 100+ |
+| LinkedIn post views | 10K+ |
+| Test Coverage | 80%+ |
+| Concurrent executions | 100+ |
+| Documentation pages | 14 |
+| Plugins built | 10+ |
+| Interview calls | 5+ |

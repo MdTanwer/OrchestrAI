@@ -1,66 +1,64 @@
-# OrchestrAI Documentation
+# OrchestrAI — AI Agent Orchestration Platform
 
-Welcome to the OrchestrAI documentation. This guide provides comprehensive information about the OrchestrAI platform.
+> Build, run, and monitor multi-agent AI workflows using simple YAML.
 
-## Table of Contents
+OrchestrAI is an open-source, Java-based orchestration platform designed specifically for AI agents. Define complex multi-agent pipelines in YAML, execute them at scale, and monitor every step in real time.
 
-### Getting Started
-- [Overview](00-overview.md) - Introduction to OrchestrAI and its capabilities
-- [Vision and Goals](01-vision-and-goals.md) - Our mission and strategic objectives
+---
 
-### Core Concepts
-- [Terminology](02-terminology.md) - Key terms and definitions
-- [Features](03-features.md) - Comprehensive feature overview
-- [YAML Schema](04-yaml-schema.md) - Workflow and configuration schema reference
+## Why OrchestrAI?
 
-### Architecture
-- [Architecture](05-architecture.md) - System architecture and component design
-- [Data Models](06-data-models.md) - Database schema and data structures
-- [Execution Engine](07-execution-engine.md) - Workflow execution internals
+Modern AI applications need multiple agents working together — but orchestrating them is painful. OrchestrAI provides:
 
-### Extensibility
-- [Plugin System](08-plugin-system.md) - Building and using plugins
-- [AI Agents](09-ai-agents.md) - Agent configuration and management
+- Declarative YAML workflows
+- Multi-LLM support (OpenAI, Claude, Gemini, local models)
+- Plugin-based architecture
+- Distributed execution via Kafka
+- Real-time monitoring dashboard
+- Token and cost tracking
+- Human-in-the-loop steps
 
-### Integration
-- [API Design](10-api-design.md) - REST, GraphQL, and Webhook APIs
+---
 
-### Operations
-- [Deployment](11-deployment.md) - Deployment guides for various environments
-- [Security](12-security.md) - Security architecture and best practices
+## Documentation Index
 
-### Planning
-- [Roadmap](13-roadmap.md) - Project roadmap and future plans
+| # | Document | Description |
+|---|----------|-------------|
+| 00 | [Overview](./00-overview.md) | Project introduction |
+| 01 | [Vision & Goals](./01-vision-and-goals.md) | Why we're building this |
+| 02 | [Terminology](./02-terminology.md) | Core concepts defined |
+| 03 | [Features](./03-features.md) | What OrchestrAI does |
+| 04 | [YAML Schema](./04-yaml-schema.md) | Workflow definition format |
+| 05 | [Architecture](./05-architecture.md) | System design |
+| 06 | [Data Models](./06-data-models.md) | Database schemas |
+| 07 | [Execution Engine](./07-execution-engine.md) | How workflows run |
+| 08 | [Plugin System](./08-plugin-system.md) | Extensibility model |
+| 09 | [AI Agents](./09-ai-agents.md) | LLM integration |
+| 10 | [API Design](./10-api-design.md) | REST API reference |
+| 11 | [Deployment](./11-deployment.md) | Running OrchestrAI |
+| 12 | [Security](./12-security.md) | Auth and secrets |
+| 13 | [Roadmap](./13-roadmap.md) | Development plan |
 
-## Quick Links
+---
 
-### For Developers
-- Start with [Overview](00-overview.md)
-- Learn the [YAML Schema](04-yaml-schema.md)
-- Explore the [Plugin System](08-plugin-system.md)
-- Check the [API Design](10-api-design.md)
+## Quick Start
 
-### For Operators
-- Review [Architecture](05-architecture.md)
-- Follow [Deployment](11-deployment.md) guides
-- Understand [Security](12-security.md) requirements
+```bash
+git clone https://github.com/yourname/orchestrai.git
+cd orchestrai
+docker-compose up
+```
 
-### For Contributors
-- Read [Vision and Goals](01-vision-and-goals.md)
-- Check the [Roadmap](13-roadmap.md)
-- Review [Terminology](02-terminology.md)
+Open http://localhost:8080 and create your first flow.
 
-## Getting Help
+---
 
-- **Documentation**: Search these docs for answers
-- **GitHub Issues**: Report bugs and request features
-- **Community**: Join our Discord community
-- **Support**: Contact support@orchestrai.com
+## Tech Stack
 
-## Contributing
+Java 17 · Quarkus · Apache Kafka · PostgreSQL · Next.js · Docker
 
-We welcome contributions! Please see our contribution guidelines in the main repository.
+---
 
 ## License
 
-OrchestrAI is open-source software. See the LICENSE file for details.
+Apache 2.0

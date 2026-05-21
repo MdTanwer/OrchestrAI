@@ -1,52 +1,155 @@
-# Terminology
+# 02 — Terminology & Core Concepts
 
-## Core Concepts
+This document defines every term used throughout OrchestrAI. Understanding this vocabulary is essential.
 
-### Workflow
-A defined sequence of operations that accomplish a specific task. Workflows are composed of steps, conditions, and data flows.
+---
 
-### Agent
-An autonomous AI entity that can perform tasks, make decisions, and interact with other agents or systems.
+## Core Terms
 
-### Plugin
-An extension module that adds functionality to OrchestrAI, such as integrations with external services or custom processing logic.
+### Flow
 
-### Step
-A single unit of work within a workflow. Steps can be agent tasks, API calls, data transformations, or other operations.
+A declarative definition of a workflow, written in YAML. A Flow is a template — it defines what should happen but doesn't run until executed.
 
-### Trigger
-An event or condition that initiates workflow execution. Triggers can be scheduled, event-based, or manual.
-
-### Context
-The data and state that flows through a workflow, accessible to all steps within that workflow.
-
-### Schema
-The YAML structure that defines workflows, agents, and other OrchestrAI resources.
-
-## Execution Terms
-
-### Execution Engine
-The core component that schedules, runs, and monitors workflow executions.
-
-### Job
-A single instance of a workflow execution.
+```yaml
+id: my-flow
+tasks:
+  - id: step1
+    type: openai.chat
+```
 
 ### Task
-A unit of work assigned to an agent or executed by the system.
 
-### Pipeline
-A series of connected workflows that process data in stages.
+A single step within a Flow. Each task has a type (which plugin to use) and configuration. Tasks run sequentially by default.
 
-## Configuration Terms
+### Execution
 
-### Blueprint
-A reusable workflow template that can be instantiated with different parameters.
+A runtime instance of a Flow. When you "run" a Flow, you create an Execution. Each Execution has a unique ID, state, and history.
+
+| Concept | Analogy |
+|---------|---------|
+| Flow (template) | Recipe |
+| Execution (instance) | Cooked meal |
+
+### TaskRun
+
+A runtime instance of a single Task within an Execution. If a Flow has 5 tasks and you execute it, you get 5 TaskRuns.
+
+### Trigger
+
+An event that starts an Execution. Types:
+
+| Type | Description |
+|------|-------------|
+| Manual | User clicks "Run" |
+| Cron | Scheduled time |
+| Webhook | HTTP request |
+| Event | Kafka message |
+
+### Plugin
+
+A reusable, pluggable component that defines a task type. Examples:
+
+- `openai.chat` — Call OpenAI
+- `http.request` — Make HTTP call
+- `shell.exec` — Run shell command
+
+### Worker
+
+A process that executes TaskRuns. Workers pull tasks from Kafka queues and execute them. You can run multiple workers for scalability.
+
+### Namespace
+
+A logical grouping of Flows (like a folder). Used for organization and access control.
+
+```
+namespace: marketing
+  ├── flow: email-campaign
+  └── flow: lead-scoring
+```
+
+### Input
+
+Parameters passed into a Flow at execution time.
+
+```yaml
+inputs:
+  - id: userQuery
+    type: STRING
+    required: true
+```
+
+### Output
+
+Data produced by a Task, usable by subsequent tasks.
+
+```yaml
+- id: step1
+  type: openai.chat
+  # produces: outputs.step1.response
+
+- id: step2
+  prompt: "{{ outputs.step1.response }}"
+```
 
 ### Variable
-A named value that can be referenced throughout a workflow configuration.
 
-### Secret
-Encrypted sensitive data (API keys, passwords) that can be securely referenced in workflows.
+A reusable value within a Flow.
 
-### Environment
-A named configuration set (development, staging, production) with specific settings and resources.
+```yaml
+variables:
+  model: "gpt-4"
+tasks:
+  - id: chat
+    model: "{{ vars.model }}"
+```
+
+### State (Execution States)
+
+| State | Description |
+|-------|-------------|
+| CREATED | Execution created, not started |
+| RUNNING | Currently executing |
+| SUCCESS | All tasks completed |
+| FAILED | A task failed |
+| CANCELLED | Manually stopped |
+| PAUSED | Waiting for human input |
+
+### Expression
+
+Dynamic value resolved at runtime, using `{{ }}` syntax.
+
+```yaml
+prompt: "Hello {{ inputs.name }}, today is {{ now() }}"
+```
+
+---
+
+## AI-Specific Terms
+
+### Agent
+
+An AI-powered Task that uses an LLM to make decisions or generate output.
+
+### Prompt
+
+The input text sent to an LLM.
+
+### Token
+
+A unit of text (~4 characters) used by LLMs. Tokens drive cost.
+
+### Context Window
+
+The maximum tokens an LLM can process at once.
+
+### Tool Calling
+
+An LLM's ability to invoke functions or APIs as part of its response.
+
+### Chain
+
+A sequence of agent tasks where each agent's output feeds the next.
+
+### Human-in-the-Loop (HITL)
+
+A workflow step that pauses for human approval before continuing.

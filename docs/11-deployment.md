@@ -1,288 +1,288 @@
-# Deployment
+# 11 — Deployment
 
-## Overview
+## Docker Compose (Local Dev)
 
-This guide covers deploying OrchestrAI in various environments, from development to production.
-
-## Deployment Options
-
-### Docker Deployment
-
-#### Docker Compose (Development)
 ```yaml
-version: '3.8'
+version: "3.8"
+
 services:
-  orchestrAI:
-    image: orchestrai/orchestrai:latest
-    ports:
-      - "8080:8080"
-    environment:
-      - DATABASE_URL=postgresql://user:pass@db:5432/orchestrai
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - db
-      - redis
-  
-  db:
+
+  # PostgreSQL
+  postgres:
     image: postgres:15
     environment:
-      - POSTGRES_DB=orchestrai
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
+      POSTGRES_DB: orchestrai
+      POSTGRES_USER: orchestrai
+      POSTGRES_PASSWORD: orchestrai
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-  
-  redis:
-    image: redis:7
+
+  # Kafka + Zookeeper
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+
+  # OrchestrAI API Server
+  orchestrai-api:
+    build: ./api-server
+    depends_on:
+      - postgres
+      - kafka
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/orchestrai
+      DB_USER: orchestrai
+      DB_PASSWORD: orchestrai
+      KAFKA_BOOTSTRAP: kafka:9092
+      JWT_SECRET: change-me-in-production
+    ports:
+      - "8080:8080"
+
+  # OrchestrAI Worker
+  orchestrai-worker:
+    build: ./worker
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      DB_URL: jdbc:postgresql://postgres:5432/orchestrai
+    deploy:
+      replicas: 2
+
+  # OrchestrAI UI
+  orchestrai-ui:
+    build: ./ui
+    depends_on:
+      - orchestrai-api
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+
+  # Prometheus (Metrics)
+  prometheus:
+    image: prom/prometheus:latest
     volumes:
-      - redis_data:/data
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  # Grafana (Dashboard)
+  grafana:
+    image: grafana/grafana:latest
+    depends_on:
+      - prometheus
+    ports:
+      - "3001:3000"
 
 volumes:
   postgres_data:
-  redis_data:
 ```
 
-#### Docker Compose (Production)
+---
+
+## Quick Start
+
+```bash
+# Clone repository
+git clone https://github.com/yourname/orchestrai.git
+cd orchestrai
+
+# Start all services
+docker-compose up -d
+
+# Check status
+docker-compose ps
+
+# View logs
+docker-compose logs -f orchestrai-api
+
+# Open UI
+open http://localhost:3000
+
+# Open API
+curl http://localhost:8080/v1/health
+
+# Stop everything
+docker-compose down
+```
+
+---
+
+## Environment Variables
+
+### API Server
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| DB_URL | Yes | — | PostgreSQL JDBC URL |
+| DB_USER | Yes | — | DB username |
+| DB_PASSWORD | Yes | — | DB password |
+| KAFKA_BOOTSTRAP | Yes | — | Kafka bootstrap servers |
+| JWT_SECRET | Yes | — | JWT signing secret |
+| SERVER_PORT | No | 8080 | HTTP port |
+| LOG_LEVEL | No | INFO | Log level |
+| CORS_ORIGINS | No | * | Allowed CORS origins |
+
+### Worker
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| KAFKA_BOOTSTRAP | Yes | — | Kafka bootstrap servers |
+| DB_URL | Yes | — | PostgreSQL JDBC URL |
+| WORKER_THREADS | No | 10 | Thread pool size |
+| WORKER_ID | No | auto | Unique worker identifier |
+| PLUGINS_DIR | No | /plugins | Custom plugins directory |
+
+---
+
+## Production Deployment (Kubernetes)
+
+### Namespace
+
 ```yaml
-version: '3.8'
-services:
-  orchestrAI:
-    image: orchestrai/orchestrai:latest
-    ports:
-      - "8080:8080"
-    environment:
-      - DATABASE_URL=postgresql://user:pass@db:5432/orchestrai
-      - REDIS_URL=redis://redis:6379
-      - ENVIRONMENT=production
-      - LOG_LEVEL=info
-    depends_on:
-      - db
-      - redis
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orchestrai
 ```
 
-### Kubernetes Deployment
+### API Server Deployment
 
-#### Deployment Manifest
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: orchestrai
+  name: orchestrai-api
+  namespace: orchestrai
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: orchestrai-api
+  template:
+    metadata:
+      labels:
+        app: orchestrai-api
+    spec:
+      containers:
+        - name: api
+          image: orchestrai/api:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: orchestrai-secrets
+                  key: db-url
+            - name: KAFKA_BOOTSTRAP
+              value: "kafka:9092"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /v1/health
+              port: 8080
+            initialDelaySeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /v1/ready
+              port: 8080
+```
+
+### Worker Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrai-worker
+  namespace: orchestrai
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: orchestrai
+      app: orchestrai-worker
   template:
     metadata:
       labels:
-        app: orchestrai
+        app: orchestrai-worker
     spec:
       containers:
-      - name: orchestrai
-        image: orchestrai/orchestrai:latest
-        ports:
-        - containerPort: 8080
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: orchestrai-secrets
-              key: database-url
-        - name: REDIS_URL
-          valueFrom:
-            secretKeyRef:
-              name: orchestrai-secrets
-              key: redis-url
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "500m"
-          limits:
-            memory: "1Gi"
-            cpu: "1000m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 5
+        - name: worker
+          image: orchestrai/worker:latest
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: "kafka:9092"
+            - name: WORKER_THREADS
+              value: "20"
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
 ```
 
-#### Service Manifest
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: orchestrai
-spec:
-  selector:
-    app: orchestrai
-  ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 8080
-  type: LoadBalancer
-```
+---
 
-#### ConfigMap
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: orchestrai-config
-data:
-  ENVIRONMENT: "production"
-  LOG_LEVEL: "info"
-  WORKER_COUNT: "4"
-```
+## Maven Build
 
-#### Secret
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: orchestrai-secrets
-type: Opaque
-stringData:
-  database-url: "postgresql://user:pass@db:5432/orchestrai"
-  redis-url: "redis://redis:6379"
-  api-key: "your-api-key"
-```
-
-### Cloud Deployment
-
-#### AWS
-- **EKS**: Kubernetes deployment on AWS
-- **ECS**: Fargate deployment
-- **RDS**: PostgreSQL database
-- **ElastiCache**: Redis cache
-- **ALB**: Load balancer
-
-#### GCP
-- **GKE**: Kubernetes deployment on GCP
-- **Cloud Run**: Serverless deployment
-- **Cloud SQL**: PostgreSQL database
-- **Memorystore**: Redis cache
-- **Cloud Load Balancing**: Load balancer
-
-#### Azure
-- **AKS**: Kubernetes deployment on Azure
-- **Container Instances**: Container deployment
-- **Azure Database**: PostgreSQL database
-- **Azure Cache**: Redis cache
-- **Application Gateway**: Load balancer
-
-## Configuration
-
-### Environment Variables
 ```bash
-# Database
-DATABASE_URL=postgresql://user:pass@host:5432/db
+# Build all modules
+mvn clean package -DskipTests
 
-# Cache
-REDIS_URL=redis://host:6379
+# Build with tests
+mvn clean verify
 
-# Application
-ENVIRONMENT=production
-LOG_LEVEL=info
-PORT=8080
-WORKER_COUNT=4
+# Build Docker images
+mvn clean package jib:build
 
-# Security
-API_KEY=your-api-key
-SECRET_KEY=your-secret-key
-
-# External Services
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-...
+# Run locally
+mvn quarkus:dev -pl api-server
 ```
 
-### Database Setup
-```bash
-# Run migrations
-orchestrai migrate up
+---
 
-# Create admin user
-orchestrai users create --email admin@example.com --password pass
+## Project Module Structure
+
 ```
-
-## Monitoring
-
-### Health Checks
-```bash
-# Health endpoint
-curl http://localhost:8080/health
-
-# Ready endpoint
-curl http://localhost:8080/ready
+orchestrai/
+├── orchestrai-core/          # Shared domain models
+├── orchestrai-yaml-parser/   # YAML → Domain model
+├── orchestrai-engine/        # Execution logic
+├── orchestrai-api-server/    # REST API (Quarkus)
+├── orchestrai-worker/          # Task executor
+├── orchestrai-scheduler/     # Trigger scheduler
+├── orchestrai-plugin-sdk/    # Plugin interface
+├── orchestrai-plugins/       # Built-in plugins
+│   ├── plugin-openai/
+│   ├── plugin-anthropic/
+│   ├── plugin-http/
+│   └── plugin-core/
+├── orchestrai-ui/              # Next.js dashboard
+├── orchestrai-cli/           # CLI tool
+└── docker-compose.yml
 ```
-
-### Metrics
-- Prometheus metrics endpoint: `/metrics`
-- Custom dashboards in Grafana
-- Alert rules for critical metrics
-
-### Logging
-- Structured JSON logging
-- Log aggregation (ELK, Cloud Logging)
-- Log levels: debug, info, warn, error
-
-## Scaling
-
-### Horizontal Scaling
-- Increase replica count in Kubernetes
-- Use auto-scaling based on CPU/memory
-- Scale based on queue depth
-
-### Vertical Scaling
-- Increase resource limits
-- Optimize database connections
-- Tune cache size
-
-## Backup and Recovery
-
-### Database Backup
-```bash
-# PostgreSQL backup
-pg_dump dbname > backup.sql
-
-# Restore
-psql dbname < backup.sql
-```
-
-### Configuration Backup
-- Version control workflow definitions
-- Backup secrets securely
-- Document configuration changes
-
-## Troubleshooting
-
-### Common Issues
-
-#### Database Connection Failed
-- Check DATABASE_URL
-- Verify database is accessible
-- Check network policies
-
-#### High Memory Usage
-- Reduce worker count
-- Increase memory limits
-- Check for memory leaks
-
-#### Slow Execution
-- Check database performance
-- Verify cache is working
-- Review workflow complexity

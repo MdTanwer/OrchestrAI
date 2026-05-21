@@ -1,292 +1,309 @@
-# API Design
+# 10 — REST API Design
 
-## Overview
+## Base URL
 
-OrchestrAI provides multiple API interfaces for interacting with the system: REST API, GraphQL, and Webhooks. This document describes the API design and usage.
-
-## REST API
-
-### Base URL
 ```
-https://api.orchestrai.com/v1
+https://api.orchestrai.io/v1
 ```
 
-### Authentication
-All API requests require authentication via Bearer token:
+## Authentication
+
+All requests require:
+
 ```
-Authorization: Bearer <your-api-key>
+Authorization: Bearer <jwt-token>
 ```
 
-### Endpoints
+---
 
-#### Workflows
+## Endpoints
 
-##### List Workflows
-```http
-GET /workflows
+### Flows
+
+#### `POST /flows`
+
+Create a new flow.
+
+**Body:**
+
+```yaml
+id: my-flow
+namespace: default
+tasks: [...]
 ```
+
+**Response:** `201 Created`
+
+```json
+{ "id": "uuid", "version": 1 }
+```
+
+#### `GET /flows`
+
+List all flows.
+
+**Query params:** `namespace`, `page`, `size`
+
+#### `GET /flows/{namespace}/{id}`
+
+Get a specific flow.
+
+#### `PUT /flows/{namespace}/{id}`
+
+Update a flow (creates new version).
+
+#### `DELETE /flows/{namespace}/{id}`
+
+Delete a flow.
+
+---
+
+### Executions
+
+#### `POST /flows/{namespace}/{id}/execute`
+
+Start a new execution.
+
+**Body:**
+
+```json
+{
+  "inputs": { "userQuery": "Hello" },
+  "labels": { "trigger": "test" }
+}
+```
+
+**Response:** `202 Accepted`
+
+```json
+{ "executionId": "uuid", "state": "CREATED" }
+```
+
+#### `GET /executions/{id}`
+
+Get execution details.
+
 **Response:**
+
 ```json
 {
-  "workflows": [
-    {
-      "id": "uuid",
-      "name": "workflow-name",
-      "version": "1.0",
-      "status": "active"
-    }
+  "id": "uuid",
+  "state": "RUNNING",
+  "startedAt": "2024-01-15T10:00:00Z",
+  "taskRuns": []
+}
+```
+
+#### `GET /executions/{id}/logs`
+
+Get logs (paginated).
+
+#### `GET /executions/{id}/logs/stream` (SSE)
+
+Stream logs in real time.
+
+```
+event: log
+data: {"level":"INFO","message":"Task started"}
+
+event: state
+data: {"state":"RUNNING"}
+```
+
+#### `POST /executions/{id}/cancel`
+
+Cancel execution.
+
+#### `POST /executions/{id}/resume`
+
+Resume a paused execution (Human-in-the-Loop).
+
+**Body:**
+
+```json
+{
+  "taskRunId": "uuid",
+  "approved": true,
+  "comment": "Looks good!"
+}
+```
+
+#### `GET /executions`
+
+List executions with filters.
+
+**Query params:**
+
+- `namespace=default`
+- `flowId=my-flow`
+- `state=RUNNING`
+- `from=2024-01-01`
+- `to=2024-01-31`
+- `page=0`
+- `size=20`
+
+---
+
+### Plugins
+
+#### `GET /plugins`
+
+List all registered plugins.
+
+**Response:**
+
+```json
+[
+  {
+    "type": "openai.chat",
+    "version": "1.0.0",
+    "description": "OpenAI Chat Completion",
+    "schema": {}
+  }
+]
+```
+
+#### `GET /plugins/{type}`
+
+Get plugin details and config schema.
+
+---
+
+### Triggers
+
+#### `POST /webhooks/{namespace}/{flowId}`
+
+Trigger a flow via webhook.
+
+No auth required (uses webhook secret in header):
+
+```
+X-OrchestrAI-Secret: <webhook-secret>
+```
+
+Body: any JSON → passed as trigger data
+
+---
+
+### Secrets
+
+#### `POST /secrets`
+
+Store a secret.
+
+**Body:**
+
+```json
+{
+  "namespace": "default",
+  "key": "OPENAI_API_KEY",
+  "value": "sk-..."
+}
+```
+
+#### `DELETE /secrets/{namespace}/{key}`
+
+Delete a secret.
+
+---
+
+### Metrics
+
+#### `GET /metrics/executions`
+
+Execution statistics.
+
+**Response:**
+
+```json
+{
+  "total": 1523,
+  "success": 1489,
+  "failed": 34,
+  "successRate": 97.8,
+  "avgDurationMs": 4532
+}
+```
+
+#### `GET /metrics/costs`
+
+Cost breakdown.
+
+**Response:**
+
+```json
+{
+  "totalCostUsd": 23.45,
+  "byFlow": [
+    { "flowId": "my-flow", "costUsd": 12.34 }
   ],
-  "total": 10,
-  "page": 1
+  "byModel": [
+    { "model": "gpt-4", "costUsd": 18.90 },
+    { "model": "claude-3", "costUsd": 4.55 }
+  ]
 }
 ```
 
-##### Get Workflow
-```http
-GET /workflows/{workflow_id}
-```
+---
 
-##### Create Workflow
-```http
-POST /workflows
-Content-Type: application/json
+## Error Responses
 
-{
-  "name": "workflow-name",
-  "version": "1.0",
-  "definition": "yaml: ..."
-}
-```
+All errors follow this format:
 
-##### Update Workflow
-```http
-PUT /workflows/{workflow_id}
-Content-Type: application/json
-
-{
-  "definition": "yaml: ..."
-}
-```
-
-##### Delete Workflow
-```http
-DELETE /workflows/{workflow_id}
-```
-
-#### Executions
-
-##### List Executions
-```http
-GET /executions?workflow_id={workflow_id}
-```
-
-##### Get Execution
-```http
-GET /executions/{execution_id}
-```
-
-##### Trigger Execution
-```http
-POST /executions
-Content-Type: application/json
-
-{
-  "workflow_id": "uuid",
-  "input": {}
-}
-```
-
-##### Cancel Execution
-```http
-POST /executions/{execution_id}/cancel
-```
-
-#### Agents
-
-##### List Agents
-```http
-GET /agents
-```
-
-##### Get Agent
-```http
-GET /agents/{agent_id}
-```
-
-##### Create Agent
-```http
-POST /agents
-Content-Type: application/json
-
-{
-  "name": "agent-name",
-  "type": "llm",
-  "model": "gpt-4",
-  "configuration": {}
-}
-```
-
-## GraphQL API
-
-### Endpoint
-```
-https://api.orchestrai.com/graphql
-```
-
-### Example Query
-```graphql
-query GetWorkflow($id: ID!) {
-  workflow(id: $id) {
-    id
-    name
-    version
-    definition
-    executions(limit: 10) {
-      id
-      status
-      startedAt
-    }
-  }
-}
-```
-
-### Example Mutation
-```graphql
-mutation CreateWorkflow($input: WorkflowInput!) {
-  createWorkflow(input: $input) {
-    id
-    name
-    version
-  }
-}
-```
-
-### Subscriptions
-```graphql
-subscription ExecutionUpdates($executionId: ID!) {
-  executionUpdates(executionId: $executionId) {
-    id
-    status
-    currentStep
-    output
-  }
-}
-```
-
-## Webhooks
-
-### Configuration
-Webhooks can be configured to receive notifications about events.
-
-#### Create Webhook
-```http
-POST /webhooks
-Content-Type: application/json
-
-{
-  "url": "https://your-domain.com/webhook",
-  "events": ["execution.completed", "execution.failed"],
-  "secret": "webhook-secret"
-}
-```
-
-### Webhook Events
-
-#### execution.completed
 ```json
 {
-  "event": "execution.completed",
-  "timestamp": "2024-01-01T00:00:00Z",
-  "data": {
-    "execution_id": "uuid",
-    "workflow_id": "uuid",
-    "status": "completed",
-    "output": {}
-  }
+  "error": "FLOW_NOT_FOUND",
+  "message": "Flow 'my-flow' not found in namespace 'default'",
+  "timestamp": "2024-01-15T10:00:00Z",
+  "requestId": "uuid"
 }
 ```
 
-#### execution.failed
-```json
-{
-  "event": "execution.failed",
-  "timestamp": "2024-01-01T00:00:00Z",
-  "data": {
-    "execution_id": "uuid",
-    "workflow_id": "uuid",
-    "error": "Error message"
-  }
-}
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| FLOW_NOT_FOUND | 404 | Flow doesn't exist |
+| FLOW_INVALID | 400 | YAML validation failed |
+| EXECUTION_NOT_FOUND | 404 | Execution doesn't exist |
+| PLUGIN_NOT_FOUND | 400 | Plugin type unknown |
+| UNAUTHORIZED | 401 | Missing or invalid token |
+| FORBIDDEN | 403 | No access to namespace |
+| CONFLICT | 409 | Duplicate flow ID |
+| INTERNAL_ERROR | 500 | Server error |
+
+---
+
+## WebSocket / SSE
+
+### Real-time Execution Updates
+
+Connect to SSE endpoint:
+
+```
+GET /executions/{id}/logs/stream
+Accept: text/event-stream
 ```
 
-### Signature Verification
-Webhooks include a signature for verification:
-```python
-import hmac
-import hashlib
+**Events received:**
 
-def verify_signature(payload, signature, secret):
-    expected = hmac.new(
-        secret.encode(),
-        payload,
-        hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(expected, signature)
+```
+event: task_started
+data: {"taskId":"step1","startedAt":"..."}
+
+event: log
+data: {"level":"INFO","message":"Calling OpenAI..."}
+
+event: task_completed
+data: {"taskId":"step1","durationMs":1234}
+
+event: execution_completed
+data: {"state":"SUCCESS","totalCostUsd":0.045}
 ```
 
-## Error Handling
+---
 
-### Error Response Format
-```json
-{
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Human-readable error message",
-    "details": {}
-  }
-}
-```
+## API Versioning Strategy
 
-### Common Error Codes
-- `INVALID_REQUEST`: Malformed request
-- `UNAUTHORIZED`: Missing or invalid authentication
-- `FORBIDDEN`: Insufficient permissions
-- `NOT_FOUND`: Resource not found
-- `VALIDATION_ERROR`: Input validation failed
-- `RATE_LIMIT_EXCEEDED`: Too many requests
-- `INTERNAL_ERROR`: Server error
-
-### Rate Limiting
-- Default: 1000 requests per hour
-- Headers included: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
-
-## SDKs
-
-### Python SDK
-```python
-from orchestrAI import Client
-
-client = Client(api_key="your-key")
-
-workflow = client.workflows.get("workflow-id")
-execution = workflow.execute(input={"data": "value"})
-```
-
-### JavaScript SDK
-```javascript
-import { Client } from 'orchestrai';
-
-const client = new Client({ apiKey: 'your-key' });
-
-const workflow = await client.workflows.get('workflow-id');
-const execution = await workflow.execute({ data: 'value' });
-```
-
-### Go SDK
-```go
-import "github.com/orchestrai/go-sdk"
-
-client := orchestrai.NewClient("your-key")
-workflow, err := client.Workflows.Get("workflow-id")
-execution, err := workflow.Execute(map[string]interface{}{"data": "value"})
-```
+- Current version: v1
+- Version in URL: `/v1/...`
+- Old versions supported for 6 months
+- Breaking changes → new version
