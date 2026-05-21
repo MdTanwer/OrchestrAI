@@ -29,8 +29,8 @@ The system is split into small, stateless, and horizontally scalable microservic
 │  - Flows         │         │  - task-runs (WorkerTask)    │
 │  - Executions    │         │  - task-results (TaskResult) │
 │  - Secrets       │         │  - task-logs (Structured)    │
-└──────────────────┘         └──────┬────────────────┬──────┘
-                                    │                │
+│  - Logs          │         └──────┬────────────────┬──────┘
+└──────────────────┘                │                │
                                     │ consumes       │ consumes
                                     ▼                ▼
                          ┌────────────────────┐   ┌────────────────────┐
@@ -53,6 +53,7 @@ All OrchestrAI backend services are built using the **Quarkus** framework, utili
     *   Validates flow YAML structures against registered plugin schemas.
     *   Publishes execution requests to the `executions` Kafka queue.
     *   Subscribes directly to the `task-logs` Kafka topic to stream real-time execution logs directly to users via **Server-Sent Events (SSE)**, completely bypassing PostgreSQL for streaming reads.
+    *   Consumes the `task-logs` Kafka topic and performs buffered, asynchronous bulk-inserts to the PostgreSQL `logs` table, ensuring high-performance log persistence without blocking worker execution.
 
 ### 2. The Executor (Quarkus Core Engine)
 *   **Role:** The centralized, reactive "brain" of the platform.

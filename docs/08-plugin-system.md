@@ -112,6 +112,7 @@ Core plugins manage dynamic execution logic and are processed directly by the st
 | `core.foreach` | Dynamic lists loops. |
 | `core.delay` | Reactive pause for a specified duration. |
 | `core.set` | Set workflow-wide variable values. |
+| `core.log` | Output messages to the execution logs. |
 
 ### 2. AI Plugins
 Each AI plugin is provider-agnostic, allowing teams to swap model backends in the flow YAML simply by changing the task `type`.

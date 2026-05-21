@@ -115,6 +115,9 @@ tasks:
       backoff: exponential
       initialDelay: "1s"
     if: <expression>       # Optional: Skip task dynamically if condition resolves false
+    fallback:              # Optional: Run alternative task if this task fails
+      type: <plugin-type>  # Required: plugin type of the fallback task
+      # Plugin-specific config and fallback conditions
 ```
 
 ---

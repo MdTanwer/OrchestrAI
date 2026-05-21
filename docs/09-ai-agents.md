@@ -50,21 +50,21 @@ Costs are aggregated at the execution level.
 
 ## Model Fallback Pattern
 
+Task-level fallback lets you define alternative steps if a primary model provider encounters rate limits, timeouts, or API errors. The Execution Engine automatically swaps the execution configuration to the fallback task upon failure:
+
 ```yaml
-- id: ai-task
-  type: ai.chat
-  primary:
-    provider: openai
-    model: gpt-4
+- id: extract-data
+  type: openai.chat
+  model: gpt-4o
+  prompt: "Extract entities from: {{ inputs.articleText }}"
   fallback:
-    - provider: anthropic
-      model: claude-3-opus
-    - provider: google
-      model: gemini-pro
-  fallbackOn:
-    - RATE_LIMIT
-    - TIMEOUT
-    - PROVIDER_ERROR
+    type: anthropic.chat
+    model: claude-3-5-sonnet
+    prompt: "Extract entities from: {{ inputs.articleText }}"
+    fallbackOn:
+      - RATE_LIMIT
+      - TIMEOUT
+      - PROVIDER_ERROR
 ```
 
 ---

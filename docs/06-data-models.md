@@ -238,10 +238,10 @@ public class TaskRun {
 }
 
 public enum TaskRunState {
-    CREATED, RUNNING, SUCCESS, FAILED;
+    CREATED, RUNNING, SUCCESS, FAILED, CANCELLED;
     
     public boolean isTerminal() {
-        return this == SUCCESS || this == FAILED;
+        return this == SUCCESS || this == FAILED || this == CANCELLED;
     }
 }
 ```

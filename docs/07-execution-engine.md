@@ -14,25 +14,22 @@ The execution lifecycle consists of deterministic state transitions. Transitions
        └─────┬─────┘
              │ start()
              ▼
-       ┌───────────┐   pause()   ┌───────────┐
-       │  RUNNING  ├────────────►│  PAUSED   │ (Waiting for approval)
-       └─────┬─────┘◄────────────┤─────┬─────┘
-             │         resume()  │     │
-             │                   │     │ cancel()
-             ├───────────────────┼─────┘
-             │                   │
-             │ all tasks ok      │ task failed (no retry)
-             ▼                   ▼
-       ┌───────────┐       ┌───────────┐
-       │  SUCCESS  │       │  FAILED   │
-       └───────────┘       └───────────┘
-             ▲                   ▲
-             │ cancel()          │ cancel()
-             └─────────┬─────────┘
-                       │
-                 ┌─────┴─────┐
-                 │ CANCELLED │ (Terminal)
-                 └───────────┘
+       ┌───────────┐             pause()             ┌───────────┐
+       │  RUNNING  ├────────────────────────────────►│  PAUSED   │
+       └─┬───┬───┬─┘◄────────────────────────────────┤─────┬─────┘
+         │   │   │               resume()            │     │
+         │   │   │                                   │     │
+         │   │   └───────────────────────────────────┼─────┤ cancel()
+         │   │                                       │     ▼
+         │   │                cancel()               │ ┌───────────┐
+         │   └───────────────────────────────────────┼►│ CANCELLED │ (Terminal)
+         │                                           │ └───────────┘
+         │                                           │
+         │ all tasks ok                              │
+         ▼                                           ▼ task failed (no retry)
+   ┌───────────┐                               ┌───────────┐
+   │  SUCCESS  │ (Terminal)                    │  FAILED   │ (Terminal)
+   └───────────┘                               └───────────┘
 ```
 
 > [!NOTE]
