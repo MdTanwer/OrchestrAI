@@ -1,3 +1,4 @@
+# Real use case: Content team — multi-step blog pipeline with LLM spend cap per run.
 # Cost & token tracking across a multi-step LLM pipeline.
 #
 # How it works (no extra YAML per task):

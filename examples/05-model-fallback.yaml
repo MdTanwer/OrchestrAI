@@ -1,17 +1,25 @@
-# Resilience: primary OpenAI task with Anthropic fallback on rate limit / timeout.
+# Real use case: Finance ops — extract invoice line items; must complete even if OpenAI rate-limits.
+# Goals: G2 reliability | Retry + provider fallback
 
-id: extract-with-fallback
-namespace: examples.resilience
+id: invoice-line-item-extraction
+namespace: production.finance
 
-description: "Extract structured entities; fall back to Claude if OpenAI is unavailable."
+description: "Parse vendor invoice PDF text into structured JSON; fallback from OpenAI to Claude."
+
+labels:
+  team: finance-ops
+  compliance: ap-automation
 
 inputs:
-  - id: document
+  - id: invoiceText
+    type: STRING
+    required: true
+  - id: vendorId
     type: STRING
     required: true
 
 tasks:
-  - id: extract-entities
+  - id: extract-lines
     type: openai.chat
     model: gpt-4o
     timeout: "2m"
@@ -20,21 +28,30 @@ tasks:
       backoff: exponential
       initialDelay: "2s"
     prompt: |
-      Extract people, organizations, and dates from the text below.
-      Return valid JSON: { "people": [], "organizations": [], "dates": [] }
-
-      Text:
-      {{ inputs.document }}
+      Vendor: {{ inputs.vendorId }}
+      Extract line items as JSON array: [{ "sku": "", "qty": 0, "unitPriceUsd": 0 }]
+      Invoice text:
+      {{ inputs.invoiceText }}
     fallback:
       type: anthropic.chat
       model: claude-3-5-sonnet
       prompt: |
-        Extract people, organizations, and dates from the text below.
-        Return valid JSON: { "people": [], "organizations": [], "dates": [] }
-
-        Text:
-        {{ inputs.document }}
+        Vendor: {{ inputs.vendorId }}
+        Extract line items as JSON array: [{ "sku": "", "qty": 0, "unitPriceUsd": 0 }]
+        Invoice text:
+        {{ inputs.invoiceText }}
       fallbackOn:
         - RATE_LIMIT
         - TIMEOUT
         - PROVIDER_ERROR
+
+  - id: post-to-erp
+    type: http.request
+    method: POST
+    url: "https://erp.example.com/v1/ap/invoices"
+    body: |
+      {
+        "vendorId": "{{ inputs.vendorId }}",
+        "lines": {{ outputs.extract-lines.response }},
+        "extractionCostUsd": {{ outputs.extract-lines.costUsd }}
+      }

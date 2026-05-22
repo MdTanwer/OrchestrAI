@@ -44,13 +44,14 @@ See [Overview — Value Proposition](./00-overview.md#value-proposition) for the
 | 13 | [Roadmap](./13-roadmap.md) | Development plan |
 | 14 | [Native Image](./14-native-image.md) | GraalVM native builds |
 | 15 | [Examples](./15-examples.md) | What we build — sample workflows |
-| — | [`examples/`](../examples/) | Copy-pasteable YAML flow files |
+| — | [`examples/`](../examples/) | Production-style YAML flows |
+| — | [`examples/GOALS.md`](../examples/GOALS.md) | Examples ↔ vision & goals |
 
 ---
 
 ## New here?
 
-Read [Overview](./00-overview.md), then **[Examples](./15-examples.md)** and the files in [`examples/`](../examples/) before diving into architecture or code.
+Read [Overview](./00-overview.md), then **[Examples](./15-examples.md)** + **[GOALS.md](../examples/GOALS.md)** before architecture or code.
 
 ---
 

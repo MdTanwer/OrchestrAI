@@ -74,3 +74,5 @@ Reduce time spent on orchestration plumbing so teams ship AI products faster —
 - [ ] 80%+ unit test coverage
 - [ ] Complete documentation
 - [ ] Open-source on GitHub
+
+**Reference implementations:** [`examples/`](../examples/) and [`examples/GOALS.md`](../examples/GOALS.md) — real scenarios (support, finance, legal, on-call) constrained to in-scope capabilities.

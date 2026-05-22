@@ -1,52 +1,59 @@
-# Human-in-the-loop: generate marketing copy, pause for approval, then publish.
+# Real use case: Regulated industry — AI drafts customer email; compliance must approve before SendGrid.
+# Goals: Human-in-the-loop | G6 agents draft, humans gate side effects
 
-id: marketing-copy-approval
-namespace: examples.hitl
+id: regulated-email-campaign
+namespace: production.marketing
 
-description: "Generate ad copy, wait for human approval, publish only if approved."
+description: "Draft lifecycle email for healthcare subscribers; compliance approves before send."
+
+labels:
+  team: marketing
+  compliance: hipaa-marketing
 
 inputs:
-  - id: productName
+  - id: campaignId
     type: STRING
     required: true
-  - id: audience
+  - id: segment
     type: STRING
     required: true
-    defaults: "general consumers"
+  - id: keyMessage
+    type: STRING
+    required: true
 
 tasks:
-  - id: generate-copy
+  - id: draft-email
     type: openai.chat
     model: gpt-4o
     prompt: |
-      Write three short ad headlines (max 12 words each) for {{ inputs.productName }}.
-      Audience: {{ inputs.audience }}.
-      Format as a numbered list.
+      Draft a plain-text email (subject + body) for segment "{{ inputs.segment }}".
+      Message pillar: {{ inputs.keyMessage }}.
+      Rules: no medical claims, include unsubscribe line, max 120 words.
 
-  - id: legal-review
+  - id: compliance-review
     type: human.approval
-    message: "Approve these headlines for {{ inputs.productName }}?"
-    data: "{{ outputs.generate-copy.response }}"
+    message: "Approve email for campaign {{ inputs.campaignId }} (segment: {{ inputs.segment }})?"
+    data: "{{ outputs.draft-email.response }}"
     approvers:
+      - compliance@example.com
       - marketing-lead@example.com
-      - legal@example.com
-    timeout: "24h"
+    timeout: "48h"
     onTimeout: REJECT
 
-  - id: publish-approved
+  - id: send-approved
     type: http.request
-    if: "{{ outputs.legal-review.approved }}"
+    if: "{{ outputs.compliance-review.approved }}"
     method: POST
-    url: "https://cms.example.com/v1/campaigns/draft"
+    url: "https://api.sendgrid.com/v3/mail/send"
     body: |
       {
-        "product": "{{ inputs.productName }}",
-        "headlines": "{{ outputs.generate-copy.response }}"
+        "campaignId": "{{ inputs.campaignId }}",
+        "content": "{{ outputs.draft-email.response }}"
       }
 
-  - id: notify-rejected
+  - id: audit-rejected
     type: http.request
-    if: "{{ !outputs.legal-review.approved }}"
+    if: "{{ !outputs.compliance-review.approved }}"
     method: POST
-    url: "https://hooks.slack.com/services/EXAMPLE/marketing"
-    body: "Headlines for {{ inputs.productName }} were rejected or timed out."
+    url: "https://audit.example.com/v1/marketing/blocked"
+    body: '{"campaignId":"{{ inputs.campaignId }}","reason":"compliance_rejected"}'

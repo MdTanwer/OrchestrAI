@@ -1,0 +1,92 @@
+# Real use case: Legal ops — extract risks from vendor MSAs; finance/legal approves high-liability deals.
+# Goals: Human-in-the-loop | Connected agents | Cost-aware multi-step review
+
+id: vendor-contract-review
+namespace: production.legal
+
+description: "Extract obligations and risk flags; require human approval when liability score is high."
+
+labels:
+  team: legal
+  compliance: vendor-msa
+  tier: production
+
+inputs:
+  - id: contractText
+    type: STRING
+    required: true
+  - id: vendorName
+    type: STRING
+    required: true
+  - id: contractValueUsd
+    type: FLOAT
+    required: true
+
+variables:
+  reviewModel: gpt-4o
+  liabilityThreshold: 7
+
+tasks:
+  - id: extract-clauses
+    type: openai.chat
+    model: "{{ vars.reviewModel }}"
+    prompt: |
+      Extract from this vendor MSA as JSON:
+      { "terminationNoticeDays": number, "liabilityCapUsd": number, "autoRenew": boolean,
+        "dataProcessingAddendum": boolean, "riskFlags": ["string"] }
+      Vendor: {{ inputs.vendorName }}
+
+      Contract:
+      {{ inputs.contractText }}
+
+  - id: score-liability
+    type: openai.chat
+    model: gpt-4o-mini
+    prompt: |
+      Given clause JSON and deal size {{ inputs.contractValueUsd }} USD, output ONLY an integer 1-10
+      liability score (10 = unacceptable risk). No explanation.
+
+      Clauses: {{ outputs.extract-clauses.response }}
+
+  - id: approval-gate
+    type: core.if
+    condition: "{{ outputs.score-liability.response >= vars.liabilityThreshold }}"
+    then:
+      - id: legal-approval
+        type: human.approval
+        message: "High-risk vendor contract ({{ inputs.vendorName }}) — score {{ outputs.score-liability.response }}/10"
+        data: "{{ outputs.extract-clauses.response }}"
+        approvers:
+          - legal-counsel@example.com
+          - fp-and-a@example.com
+        timeout: "72h"
+        onTimeout: REJECT
+      - id: archive-if-approved
+        type: http.request
+        if: "{{ outputs.legal-approval.approved }}"
+        method: POST
+        url: "https://clm.example.com/v1/contracts"
+        body: |
+          {
+            "vendor": "{{ inputs.vendorName }}",
+            "valueUsd": {{ inputs.contractValueUsd }},
+            "clauses": {{ outputs.extract-clauses.response }},
+            "approvedBy": "legal-hitl"
+          }
+      - id: notify-rejected
+        type: http.request
+        if: "{{ !outputs.legal-approval.approved }}"
+        method: POST
+        url: "https://procurement.example.com/v1/vendors/{{ inputs.vendorName }}/block"
+        body: '{"reason":"legal_rejected_or_timeout"}'
+    else:
+      - id: auto-approve-low-risk
+        type: http.request
+        method: POST
+        url: "https://clm.example.com/v1/contracts/auto-approve"
+        body: |
+          {
+            "vendor": "{{ inputs.vendorName }}",
+            "liabilityScore": {{ outputs.score-liability.response }},
+            "clauses": {{ outputs.extract-clauses.response }}
+          }

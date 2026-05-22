@@ -1,8 +1,23 @@
 # 15 — Examples: What We Are Building
 
-Before reading architecture or writing Java, skim these examples. They show **concrete workflows** OrchestrAI is designed to run: YAML in, multi-agent execution out, with observability and reliability built in.
+Before reading architecture or writing Java, skim these examples. Each file is a **real-world scenario** (support, on-call, marketplace, legal, finance)—not a toy prompt—scoped to [Vision & Goals](./01-vision-and-goals.md).
 
-Runnable files live in [`examples/`](../examples/). This page explains **what each one does**, **which features it exercises**, and **when to copy the pattern**.
+Runnable YAML: [`examples/`](../examples/). Goal mapping: [`examples/GOALS.md`](../examples/GOALS.md).
+
+---
+
+## Aligned with project goals (not random demos)
+
+| Goal | Examples that prove it |
+|------|-------------------------|
+| G1 Simplicity | `01` — copilot in ~15 lines of tasks |
+| G2 Reliability | `05`, `10` — retry, fallback, `onFailure` |
+| G3 Observability | `08`, `09`, `11` — cost labels + metrics on TaskRuns |
+| G4 Extensibility | `09` — Pinecone via `http.request`; `03` — custom policy plugin |
+| G5 Performance | `03`, `10` — `core.parallel` for independent work |
+| G6 Agent logic, not plumbing | All — no hand-rolled retry loops; platform owns execution |
+
+**Out of scope (no examples for these):** custom training, built-in vector DB, drag-and-drop UI. RAG appears only in `09` as HTTP to **your** index.
 
 ---
 
@@ -25,11 +40,13 @@ Every example file follows the same mental model:
 
 ## Example catalog
 
-### 1. Hello Agent — start here
+### 1. Release Notes Copilot — start here
 
-**File:** [`examples/01-hello-agent.yaml`](../examples/01-hello-agent.yaml)
+**File:** [`examples/01-hello-agent.yaml`](../examples/01-hello-agent.yaml) (`id: release-notes-copilot`)
 
-The smallest useful flow: one input, one LLM task.
+**Scenario:** In-app product copilot answers questions using **only** the release notes passed at runtime (MVP smoke test).
+
+**Goals:** G1, G6.
 
 ```mermaid
 flowchart LR
@@ -43,11 +60,13 @@ flowchart LR
 
 ---
 
-### 2. Research and Summarize — sequential chain
+### 2. Competitive Intel Briefing — sequential chain
 
-**File:** [`examples/02-research-and-summarize.yaml`](../examples/02-research-and-summarize.yaml)
+**File:** [`examples/02-research-and-summarize.yaml`](../examples/02-research-and-summarize.yaml) (`id: competitive-intel-briefing`)
 
-Two agents in series: GPT researches, Claude summarizes. Different models per step are normal.
+**Scenario:** Product marketing analyzes a competitor announcement; Claude writes a 150-word CPO brief from GPT analysis.
+
+**Goals:** Connected agents, multi-LLM, cost labels (`production.product-marketing`).
 
 ```mermaid
 flowchart LR
@@ -62,11 +81,11 @@ flowchart LR
 
 ---
 
-### 3. Content Moderation — parallel + branch
+### 3. Marketplace Listing Moderation — parallel + branch
 
-**File:** [`examples/03-content-moderation.yaml`](../examples/03-content-moderation.yaml)
+**File:** [`examples/03-content-moderation.yaml`](../examples/03-content-moderation.yaml) (`id: listing-moderation`)
 
-Polish text, run toxicity and spelling **in parallel**, then publish or alert based on results.
+**Scenario:** Trust & safety normalizes a seller listing, runs toxicity + policy checks **in parallel**, publishes or rejects by `listingId`.
 
 ```mermaid
 flowchart TD
@@ -86,11 +105,13 @@ flowchart TD
 
 ---
 
-### 4. Support Ticket Router — classify then specialize
+### 4. Helpdesk Ticket Router — webhook + classify
 
 **File:** [`examples/04-support-ticket-router.yaml`](../examples/04-support-ticket-router.yaml)
 
-One classifier task, then nested `core.if` branches so only the matching specialist agent runs.
+**Scenario:** Zendesk/Intercom webhook starts the flow; billing vs technical vs general agent drafts a reply into the ticket.
+
+**Goals:** P1 webhook trigger, router pattern, G6.
 
 ```mermaid
 flowchart TD
@@ -109,11 +130,11 @@ flowchart TD
 
 ---
 
-### 5. Model Fallback — resilience
+### 5. Invoice Line Extraction — resilience
 
-**File:** [`examples/05-model-fallback.yaml`](../examples/05-model-fallback.yaml)
+**File:** [`examples/05-model-fallback.yaml`](../examples/05-model-fallback.yaml) (`id: invoice-line-item-extraction`)
 
-Primary extraction on OpenAI; on rate limit, timeout, or provider error, the engine runs the `fallback` task on Anthropic without rewriting the whole flow.
+**Scenario:** Finance AP parses vendor invoice text to JSON and posts to ERP; Claude fallback if OpenAI rate-limits.
 
 **Features:** `fallback`, `fallbackOn`, retries, timeouts.
 
@@ -121,11 +142,11 @@ Primary extraction on OpenAI; on rate limit, timeout, or provider error, the eng
 
 ---
 
-### 6. Human Approval — human-in-the-loop
+### 6. Regulated Email Campaign — human-in-the-loop
 
-**File:** [`examples/06-human-approval.yaml`](../examples/06-human-approval.yaml)
+**File:** [`examples/06-human-approval.yaml`](../examples/06-human-approval.yaml) (`id: regulated-email-campaign`)
 
-Generate copy → execution **pauses** at `human.approval` → publish only if approved (or notify on reject/timeout).
+**Scenario:** Healthcare/life-sciences marketing draft; compliance must approve before SendGrid send.
 
 ```mermaid
 flowchart LR
@@ -140,11 +161,11 @@ flowchart LR
 
 ---
 
-### 7. Shared Context — one conversation, two models
+### 7. Interview Screening Assistant — shared context
 
-**File:** [`examples/07-shared-context.yaml`](../examples/07-shared-context.yaml)
+**File:** [`examples/07-shared-context.yaml`](../examples/07-shared-context.yaml) (`id: interview-screening-assistant`)
 
-Two tasks share `contextKey` so the second agent sees the first agent's conversation—not just a one-off string in `outputs`.
+**Scenario:** HR ATS plugin—screening bot asks questions; coach model suggests follow-ups in the **same** `contextKey` thread.
 
 **Features:** shared memory within an execution, multi-model handoff.
 
@@ -216,20 +237,72 @@ See [`examples/sample-output/execution-completed-sse.json`](../examples/sample-o
 
 ---
 
+### 9. RAG Customer Support — external vector DB
+
+**File:** [`examples/09-rag-customer-support.yaml`](../examples/09-rag-customer-support.yaml)
+
+**Scenario:** B2B billing SaaS Tier-2: embed question → query **Pinecone** → answer with citations → log to CRM.
+
+```mermaid
+flowchart LR
+  Q[customerQuestion] --> E[embed-query]
+  E --> P[retrieve-chunks HTTP Pinecone]
+  P --> A[answer-with-citations]
+  A --> CRM[log-to-crm]
+```
+
+**Goals:** G4 extensibility, G6 (orchestration only—**not** hosting vectors). Aligns with value prop #7 (RAG via external store).
+
+---
+
+### 10. Incident Triage — on-call webhook
+
+**File:** [`examples/10-incident-triage.yaml`](../examples/10-incident-triage.yaml)
+
+**Scenario:** PagerDuty/Datadog POSTs an alert; classify severity, fetch runbook + draft Slack update **in parallel**, page on-call or open Jira.
+
+**Goals:** G2, G5, webhook trigger, `onFailure` escalation.
+
+---
+
+### 11. Weekly Ops Digest — cron + leadership report
+
+**File:** [`examples/11-weekly-ops-digest.yaml`](../examples/11-weekly-ops-digest.yaml)
+
+**Scenario:** Every Monday 8am ET: pull Datadog SLO + PagerDuty incidents, Claude writes VP digest, email with `costUsd` in metadata.
+
+**Goals:** G3 observability, cron trigger (P1), cost attribution labels.
+
+---
+
+### 12. Vendor Contract Review — legal HITL
+
+**File:** [`examples/12-contract-review-hitl.yaml`](../examples/12-contract-review-hitl.yaml)
+
+**Scenario:** Extract MSA clauses → liability score 1–10 → if ≥ threshold, legal/finance approves before CLM archive; else auto-approve low risk.
+
+**Goals:** HITL (P2), connected agents, production `legal` namespace.
+
+---
+
 ## Map examples to MVP features
 
-| Example | MVP weeks (see [Roadmap](./13-roadmap.md)) | Related docs |
-|---------|---------------------------------------------|--------------|
-| 01 Hello Agent | 3–4 execution, 7 LLM plugins | [YAML Schema](./04-yaml-schema.md), [AI Agents](./09-ai-agents.md) |
-| 02 Research & Summarize | 3–4, 7 | [Features F3.1](./03-features.md), [Plugin System](./08-plugin-system.md) |
-| 03 Content Moderation | 3–4 control flow, 8 HTTP | [Execution Engine](./07-execution-engine.md) |
-| 04 Ticket Router | 3–4 | [Terminology — Chain](./02-terminology.md) |
-| 05 Model Fallback | 3–4 retries, P1 fallback | [AI Agents — Fallback](./09-ai-agents.md) |
-| 06 Human Approval | P2 HITL | [AI Agents — HITL](./09-ai-agents.md) |
-| 07 Shared Context | P2 shared memory | [AI Agents — Context](./09-ai-agents.md) |
-| 08 Cost Tracking | 7–8 LLM plugins, P1 metrics | [AI Agents — Cost](./09-ai-agents.md), [API metrics](./10-api-design.md) |
+| Example | Scenario | MVP / priority | Goals |
+|---------|----------|----------------|-------|
+| 01 Release notes copilot | In-app Q&A | P0 | G1, G6 |
+| 02 Competitive intel | PMM → CPO brief | P0 | Pipeline, multi-LLM |
+| 03 Listing moderation | Marketplace trust | P0 | G2, G5 |
+| 04 Helpdesk router | Zendesk webhook | P0–P1 triggers | G6 |
+| 05 Invoice extraction | Finance AP | P1 fallback | G2 |
+| 06 Regulated email | Compliance HITL | P2 | HITL |
+| 07 Interview screen | HR ATS | P2 context | Shared memory |
+| 08 Blog pipeline | Content + budget | P1 cost | G3 |
+| 09 RAG support | Pinecone + CRM | P0 HTTP + P1 embed | G4, G6 |
+| 10 Incident triage | On-call | P1 webhook | G2, G5 |
+| 11 Weekly digest | Platform cron | P1 cron | G3 |
+| 12 Contract review | Legal CLM | P2 HITL | HITL, agents |
 
-Examples **06**, **07**, and **08** highlight P1/P2 capabilities (HITL, shared memory, cost metrics); **01–05** align with the core P0 MVP path. Cost **rollup is automatic** for every AI task once plugins are implemented—example **08** shows how to *use* those numbers in flows and ops.
+See [GOALS.md](../examples/GOALS.md) for audience mapping (AI engineer vs backend vs DevOps).
 
 ---
 
@@ -237,7 +310,7 @@ Examples **06**, **07**, and **08** highlight P1/P2 capabilities (HITL, shared m
 
 1. [00 — Overview](./00-overview.md) — problem and value prop  
 2. [02 — Terminology](./02-terminology.md) — Flow, Execution, TaskRun  
-3. **This page** + open `examples/01` and `examples/02` in the editor  
+3. [GOALS.md](../examples/GOALS.md) + **this page** + open `01`, `04`, and `09` for your role  
 4. [04 — YAML Schema](./04-yaml-schema.md) — full field reference  
 5. [05 — Architecture](./05-architecture.md) — how it runs under the hood  
 
@@ -248,6 +321,7 @@ Examples **06**, **07**, and **08** highlight P1/P2 capabilities (HITL, shared m
 When adding a new example:
 
 1. Add `examples/NN-short-name.yaml` with a comment block at the top explaining intent.  
-2. Register it in [`examples/README.md`](../examples/README.md).  
-3. Add a short section to this document with a diagram and feature list.  
-4. Prefer realistic `namespace` values (`examples.*`, `production.*`) and fake URLs (`https://api.example.com`)—never real secrets.
+2. Register it in [`examples/README.md`](../examples/README.md) and [`examples/GOALS.md`](../examples/GOALS.md).  
+3. Add a short section to this document with scenario, goals (G1–G6), and diagram.  
+4. Use `production.*` / `operations.*` namespaces and a real business story—no generic "hello world" unless it is `01`.  
+5. Never demonstrate out-of-scope features (built-in vector DB, training, visual editor).

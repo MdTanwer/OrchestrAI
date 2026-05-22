@@ -1,0 +1,61 @@
+# Real use case: Platform team Monday digest — cron pulls metrics, LLM writes leadership summary.
+# Goals: G3 observability | Cost labels | Cron trigger | G6 no custom scheduler code
+
+id: weekly-ops-digest
+namespace: operations.reports
+
+description: "Every Monday: pull last-week SLO/error metrics, summarize for engineering leadership."
+
+labels:
+  team: platform
+  cost-center: eng-leadership
+  report: weekly-digest
+
+triggers:
+  - id: monday-morning
+    type: schedule.cron
+    cron: "0 8 * * 1"
+    timezone: "America/New_York"
+
+variables:
+  summaryModel: claude-3-5-sonnet
+  metricsWindow: 7d
+
+tasks:
+  - id: fetch-slo-metrics
+    type: http.request
+    method: GET
+    url: "https://api.datadoghq.com/api/v1/query?query=avg:slo.error_budget{{vars.metricsWindow}}"
+
+  - id: fetch-incident-count
+    type: http.request
+    method: GET
+    url: "https://api.pagerduty.com/incidents?since=-{{ vars.metricsWindow }}&team_ids=PLATFORM"
+
+  - id: write-digest
+    type: anthropic.chat
+    model: "{{ vars.summaryModel }}"
+    prompt: |
+      Write a one-page weekly ops digest for VP Engineering. Sections: SLO health, incidents, risks, asks.
+      Be factual; use numbers from the payloads only.
+
+      Datadog SLO payload:
+      {{ outputs.fetch-slo-metrics.body }}
+
+      PagerDuty incidents payload:
+      {{ outputs.fetch-incident-count.body }}
+
+  - id: email-leadership
+    type: http.request
+    method: POST
+    url: "https://notifications.example.com/v1/send"
+    body: |
+      {
+        "to": ["vp-eng@example.com", "platform-leads@example.com"],
+        "subject": "Weekly platform digest",
+        "markdown": "{{ outputs.write-digest.response }}",
+        "metadata": {
+          "costUsd": {{ outputs.write-digest.costUsd }},
+          "tokensUsed": {{ outputs.write-digest.tokensUsed }}
+        }
+      }

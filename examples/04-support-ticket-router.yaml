@@ -1,28 +1,43 @@
-# Router pattern: classify once, then run exactly one specialist agent branch.
+# Real use case: B2B SaaS — Zendesk/Intercom webhook creates ticket; AI routes to billing/tech/general.
+# Goals: Triggers (webhook) | Connected agents | G6 one ingress, specialized prompts
 
 id: support-ticket-router
-namespace: examples.routing
+namespace: production.support
 
-description: "Classify a support ticket and route it to billing, technical, or general support."
+description: "Classify inbound ticket and draft a reply with the right specialist agent."
+
+labels:
+  team: support
+  channel: email
+
+triggers:
+  - id: helpdesk-webhook
+    type: webhook
+    path: /hooks/support-ticket
+    description: "Payload from Zendesk or Intercom on new ticket."
 
 inputs:
+  - id: ticketId
+    type: STRING
+    required: true
   - id: ticketBody
     type: STRING
     required: true
   - id: customerId
     type: STRING
     required: true
+  - id: customerPlan
+    type: STRING
+    defaults: "standard"
 
 tasks:
   - id: classify
     type: openai.chat
-    model: gpt-4o
+    model: gpt-4o-mini
     prompt: |
-      Classify this support ticket into exactly one category: billing, technical, or general.
-      Reply with only the category word (lowercase).
-
-      Ticket:
-      {{ inputs.ticketBody }}
+      Classify into exactly one word: billing, technical, or general.
+      Plan: {{ inputs.customerPlan }}
+      Ticket: {{ inputs.ticketBody }}
 
   - id: route
     type: core.if
@@ -32,14 +47,13 @@ tasks:
         type: openai.chat
         model: gpt-4o
         prompt: |
-          You are a billing specialist. Draft a helpful reply for customer {{ inputs.customerId }}.
-
-          Ticket:
-          {{ inputs.ticketBody }}
+          Draft a reply for a {{ inputs.customerPlan }} customer about billing/invoices.
+          Be empathetic; cite self-serve refund policy if applicable.
+          Ticket: {{ inputs.ticketBody }}
       - id: save-reply
         type: http.request
         method: POST
-        url: "https://crm.example.com/tickets/{{ inputs.customerId }}/draft-reply"
+        url: "https://helpdesk.example.com/api/v2/tickets/{{ inputs.ticketId }}/draft"
         body: "{{ outputs.billing-agent.response }}"
     else:
       - id: technical-or-general
@@ -50,26 +64,21 @@ tasks:
             type: openai.chat
             model: gpt-4o
             prompt: |
-              You are a technical support engineer. Draft a troubleshooting reply.
-
-              Ticket:
-              {{ inputs.ticketBody }}
+              Draft troubleshooting steps for API/integration issues. Ask for requestId if missing.
+              Ticket: {{ inputs.ticketBody }}
           - id: save-reply
             type: http.request
             method: POST
-            url: "https://crm.example.com/tickets/{{ inputs.customerId }}/draft-reply"
+            url: "https://helpdesk.example.com/api/v2/tickets/{{ inputs.ticketId }}/draft"
             body: "{{ outputs.technical-agent.response }}"
         else:
           - id: general-agent
             type: openai.chat
             model: gpt-4o
             prompt: |
-              You are general support. Draft a friendly, helpful reply.
-
-              Ticket:
-              {{ inputs.ticketBody }}
+              Draft a friendly general support reply. Ticket: {{ inputs.ticketBody }}
           - id: save-reply
             type: http.request
             method: POST
-            url: "https://crm.example.com/tickets/{{ inputs.customerId }}/draft-reply"
+            url: "https://helpdesk.example.com/api/v2/tickets/{{ inputs.ticketId }}/draft"
             body: "{{ outputs.general-agent.response }}"

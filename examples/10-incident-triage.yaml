@@ -1,0 +1,108 @@
+# Real use case: On-call — PagerDuty/Datadog webhook fires this flow on every Sev1/2 alert.
+# Goals: G2 reliability | G5 parallel I/O | Triggers | Observability
+
+id: incident-triage
+namespace: operations.oncall
+
+description: "Classify alert severity, fetch runbook, draft initial comms — in parallel where possible."
+
+labels:
+  team: platform
+  environment: production
+
+triggers:
+  - id: monitoring-webhook
+    type: webhook
+    path: /hooks/incident-triage
+    description: "POST JSON from PagerDuty or Datadog monitor."
+
+inputs:
+  - id: alertTitle
+    type: STRING
+    required: true
+  - id: alertBody
+    type: STRING
+    required: true
+  - id: serviceName
+    type: STRING
+    required: true
+  - id: firingSince
+    type: STRING
+    required: true
+
+variables:
+  classifierModel: gpt-4o-mini
+
+tasks:
+  - id: classify-severity
+    type: openai.chat
+    model: "{{ vars.classifierModel }}"
+    retry:
+      maxAttempts: 3
+      backoff: exponential
+      initialDelay: "1s"
+    prompt: |
+      Classify this production alert as exactly one word: critical, high, medium, or low.
+      Service: {{ inputs.serviceName }}
+      Title: {{ inputs.alertTitle }}
+      Body: {{ inputs.alertBody }}
+
+  - id: enrich-incident
+    type: core.parallel
+    tasks:
+      - id: fetch-runbook
+        type: http.request
+        method: GET
+        url: "https://runbooks.internal.example.com/services/{{ inputs.serviceName }}"
+      - id: draft-status-update
+        type: openai.chat
+        model: "{{ vars.classifierModel }}"
+        prompt: |
+          Draft a 3-sentence internal Slack status update for engineers.
+          Severity: {{ outputs.classify-severity.response }}
+          Alert: {{ inputs.alertTitle }}
+          Since: {{ inputs.firingSince }}
+
+  - id: route-by-severity
+    type: core.if
+    condition: "{{ outputs.classify-severity.response == 'critical' || outputs.classify-severity.response == 'high' }}"
+    then:
+      - id: page-oncall
+        type: http.request
+        method: POST
+        url: "https://events.pagerduty.com/v2/enqueue"
+        body: |
+          {
+            "routing_key": "PLATFORM_PROD",
+            "event_action": "trigger",
+            "payload": {
+              "summary": "{{ inputs.alertTitle }}",
+              "severity": "{{ outputs.classify-severity.response }}",
+              "source": "{{ inputs.serviceName }}"
+            }
+          }
+      - id: post-slack-war-room
+        type: http.request
+        method: POST
+        url: "https://hooks.slack.com/services/EXAMPLE/incidents"
+        body: "{{ outputs.enrich-incident.draft-status-update.response }}"
+    else:
+      - id: ticket-only
+        type: http.request
+        method: POST
+        url: "https://jira.example.com/rest/api/2/issue"
+        body: |
+          {
+            "fields": {
+              "project": { "key": "OPS" },
+              "summary": "[{{ outputs.classify-severity.response }}] {{ inputs.alertTitle }}",
+              "description": "{{ outputs.enrich-incident.fetch-runbook.body }}"
+            }
+          }
+
+onFailure:
+  - id: escalate-triage-failure
+    type: http.request
+    method: POST
+    url: "https://events.pagerduty.com/v2/enqueue"
+    body: '{"summary":"incident-triage flow failed — manual triage required"}'

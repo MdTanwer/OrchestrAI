@@ -46,7 +46,7 @@ Full documentation lives in the [`docs/`](./docs/) directory:
 
 See also [docs/README.md](./docs/README.md) for the documentation index and quick start.
 
-**New developers:** start with [docs/15-examples.md](./docs/15-examples.md) and the YAML files in [`examples/`](./examples/) to see concrete workflows before reading architecture docs.
+**New developers:** start with [docs/15-examples.md](./docs/15-examples.md) and [examples/GOALS.md](./examples/GOALS.md)—production scenarios (support RAG, on-call, marketplace, legal) aligned to project goals.
 
 ---
 

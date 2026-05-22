@@ -1,35 +1,42 @@
-# Sequential multi-agent chain: Researcher → Editor.
-# Agent B consumes Agent A's output via {{ outputs.<taskId>.response }}.
-# Each LLM step also records tokensUsed and costUsd — see examples/08-cost-tracking.yaml.
+# Real use case: Product marketing — weekly competitive intel briefing for leadership.
+# Goals: Connected agents | Multi-LLM | Cost metrics on each step (see 08)
 
-id: research-and-summarize
-namespace: examples.multi-agent
+id: competitive-intel-briefing
+namespace: production.product-marketing
 
-description: "Research a topic, then produce an executive summary."
+description: "Research a competitor move, then produce a 150-word exec brief (GPT → Claude)."
+
+labels:
+  team: product-marketing
+  cost-center: gtm
 
 inputs:
-  - id: topic
+  - id: competitor
     type: STRING
     required: true
-    description: "Topic to research and summarize."
+  - id: announcement
+    type: STRING
+    required: true
+    description: "Press release, blog post, or pricing page diff."
 
 variables:
   researchModel: gpt-4o
   summaryModel: claude-3-5-sonnet
 
 tasks:
-  - id: research
+  - id: analyze-announcement
     type: openai.chat
     model: "{{ vars.researchModel }}"
     prompt: |
-      Research the topic below. List 5–7 bullet points with facts only—no preamble.
-      Topic: {{ inputs.topic }}
+      Competitor: {{ inputs.competitor }}
+      Announcement: {{ inputs.announcement }}
+      List: (1) what changed (2) customer impact (3) 3 suggested responses for our PMM team.
+      Bullets only, no intro.
 
-  - id: summarize
+  - id: exec-brief
     type: anthropic.chat
     model: "{{ vars.summaryModel }}"
     prompt: |
-      Turn the research notes into a 150-word executive summary for a busy stakeholder.
-
-      Research notes:
-      {{ outputs.research.response }}
+      Write a 150-word briefing for our CPO. Tone: factual, no hype.
+      Analysis:
+      {{ outputs.analyze-announcement.response }}

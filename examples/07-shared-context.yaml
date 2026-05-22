@@ -1,9 +1,14 @@
-# Shared conversation: two agents, same contextKey, different models.
+# Real use case: HR tech — phone-screen bot asks questions; coach model suggests follow-ups in same thread.
+# Goals: Shared context (P2) | Multi-LLM handoff without re-sending full history manually
 
-id: interview-assistant
-namespace: examples.context
+id: interview-screening-assistant
+namespace: production.hr
 
-description: "Interviewer agent asks questions; coach agent continues the same thread."
+description: "Interviewer agent runs the screen; coach agent continues the same conversation context."
+
+labels:
+  team: talent
+  product: ats-plugin
 
 inputs:
   - id: candidateName
@@ -12,21 +17,26 @@ inputs:
   - id: role
     type: STRING
     required: true
+  - id: competencyRubric
+    type: STRING
+    required: true
+    description: "Bulleted rubric recruiters pasted from the job scorecard."
 
 tasks:
-  - id: opening-questions
+  - id: run-screen
     type: openai.chat
-    contextKey: "interview-{{ inputs.candidateName }}"
+    contextKey: "screen-{{ inputs.candidateName }}-{{ inputs.role }}"
     model: gpt-4o
     prompt: |
-      You are conducting a phone screen for {{ inputs.role }}.
-      Candidate: {{ inputs.candidateName }}.
-      Ask three behavioral interview questions. Number them 1–3.
+      Role: {{ inputs.role }}
+      Candidate: {{ inputs.candidateName }}
+      Rubric: {{ inputs.competencyRubric }}
+      Ask exactly three behavioral questions numbered 1–3.
 
-  - id: follow-up-coach
+  - id: recruiter-coach
     type: anthropic.chat
-    contextKey: "interview-{{ inputs.candidateName }}"
+    contextKey: "screen-{{ inputs.candidateName }}-{{ inputs.role }}"
     model: claude-3-5-sonnet
     prompt: |
-      Using the conversation so far, suggest two follow-up probes the interviewer
-      should ask if answers are vague. Be specific to what the candidate likely said.
+      Based on the interview thread so far, suggest two sharp follow-up questions
+      if answers were vague. Reference competencies from the rubric.

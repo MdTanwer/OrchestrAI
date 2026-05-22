@@ -95,4 +95,4 @@ We are not a clone — we are AI-first, Java-based, and distributed.
 
 ## See example workflows
 
-Concrete flows (hello agent, multi-agent chains, moderation, routing, fallback, human approval, **cost tracking**) live in [`examples/`](../examples/) with a guided walkthrough in [15 — Examples](./15-examples.md).
+Production-style flows (support RAG, on-call triage, marketplace moderation, invoice AP, legal HITL, cron digests, and more) live in [`examples/`](../examples/)—each mapped to [Vision & Goals](./01-vision-and-goals.md) in [GOALS.md](../examples/GOALS.md). Walkthrough: [15 — Examples](./15-examples.md).

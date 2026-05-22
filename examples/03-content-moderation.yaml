@@ -1,60 +1,79 @@
-# Parallel checks + conditional publish: draft → (toxicity + spelling) → branch.
-# Shows core.parallel, core.if, and wiring outputs from nested parallel tasks.
+# Real use case: Marketplace — moderate seller product listings before they go live.
+# Goals: G2 reliability (parallel checks) | G5 parallel execution | Production namespace
 
-id: content-moderation
-namespace: examples.production
+id: listing-moderation
+namespace: production.marketplace
 
-description: "Polish user content, run safety checks in parallel, then publish or alert."
+description: "Normalize listing copy, run policy + language checks in parallel, publish or reject."
+
+labels:
+  team: trust-safety
+  surface: seller-listings
 
 inputs:
-  - id: articleText
+  - id: listingId
     type: STRING
     required: true
-    description: "Raw text to moderate and optionally publish."
+  - id: title
+    type: STRING
+    required: true
+  - id: description
+    type: STRING
+    required: true
+  - id: sellerId
+    type: STRING
+    required: true
 
 variables:
   defaultModel: gpt-4o
-  minConfidence: 0.85
 
 tasks:
-  - id: polish-draft
+  - id: normalize-listing
     type: openai.chat
     model: "{{ vars.defaultModel }}"
-    prompt: "Proofread and polish this text. Return only the revised body:\n\n{{ inputs.articleText }}"
+    prompt: |
+      Fix grammar and remove ALL-CAPS spam. Keep meaning. Return JSON:
+      { "title": "...", "description": "..." }
+      Title: {{ inputs.title }}
+      Description: {{ inputs.description }}
 
-  - id: safety-checks
+  - id: policy-checks
     type: core.parallel
     tasks:
       - id: toxicity
         type: openai.moderation
-        input: "{{ outputs.polish-draft.response }}"
-      - id: spelling
-        type: custom.spellcheck
-        text: "{{ outputs.polish-draft.response }}"
+        input: "{{ outputs.normalize-listing.response }}"
+      - id: prohibited-items
+        type: openai.chat
+        model: gpt-4o-mini
+        prompt: |
+          Does this listing violate marketplace policy (weapons, counterfeit, medical claims)?
+          Reply only: pass or fail.
+          Listing: {{ outputs.normalize-listing.response }}
 
-  - id: moderation-gate
+  - id: listing-gate
     type: core.if
-    condition: "{{ outputs.safety-checks.toxicity.flagged || outputs.safety-checks.spelling.errors > 3 }}"
+    condition: "{{ outputs.policy-checks.toxicity.flagged || outputs.policy-checks.prohibited-items.response == 'fail' }}"
     then:
-      - id: notify-reject
+      - id: reject-listing
         type: http.request
         method: POST
-        url: "https://alerts.example.com/reject"
+        url: "https://marketplace.example.com/v1/listings/{{ inputs.listingId }}/reject"
         body: |
           {
-            "reason": "moderation_failed",
-            "draft": "{{ outputs.polish-draft.response }}"
+            "sellerId": "{{ inputs.sellerId }}",
+            "reason": "trust_safety_failed"
           }
     else:
-      - id: publish
+      - id: publish-listing
         type: http.request
         method: POST
-        url: "https://api.example.com/v1/content"
-        body: "{{ outputs.polish-draft.response }}"
+        url: "https://marketplace.example.com/v1/listings/{{ inputs.listingId }}/publish"
+        body: "{{ outputs.normalize-listing.response }}"
 
 onFailure:
-  - id: alert-ops
+  - id: alert-trust-safety
     type: http.request
     method: POST
-    url: "https://hooks.slack.com/services/EXAMPLE/ops-alerts"
-    body: "content-moderation failed for execution {{ execution.id }}"
+    url: "https://hooks.slack.com/services/EXAMPLE/trust-safety"
+    body: "listing-moderation failed for {{ inputs.listingId }}"

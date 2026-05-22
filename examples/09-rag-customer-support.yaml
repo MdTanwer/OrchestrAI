@@ -1,0 +1,75 @@
+# Real use case: SaaS Tier-2 support — answer from YOUR vector index (not built into OrchestrAI).
+# Goals: G6 agent logic | Connected agents | Multi-LLM | Extensibility (HTTP + LLM plugins)
+# Out of scope: OrchestrAI does NOT host embeddings — Pinecone/Weaviate/pgvector is external.
+
+id: answer-from-knowledge-base
+namespace: production.support
+
+description: "Retrieve top docs from Pinecone, then answer the customer with citations."
+
+labels:
+  team: support
+  product: billing-saas
+  tier: production
+
+inputs:
+  - id: customerQuestion
+    type: STRING
+    required: true
+  - id: accountId
+    type: STRING
+    required: true
+  - id: planTier
+    type: STRING
+    defaults: "standard"
+
+variables:
+  answerModel: gpt-4o
+  pineconeIndex: billing-help-v3
+  maxChunks: 5
+
+tasks:
+  - id: embed-query
+    type: openai.embeddings
+    model: text-embedding-3-small
+    input: "{{ inputs.customerQuestion }}"
+
+  - id: retrieve-chunks
+    type: http.request
+    method: POST
+    url: "https://api.pinecone.io/query"
+    headers:
+      Api-Key: "${PINECONE_API_KEY}"
+    body: |
+      {
+        "index": "{{ vars.pineconeIndex }}",
+        "topK": {{ vars.maxChunks }},
+        "vector": {{ outputs.embed-query.embedding }},
+        "includeMetadata": true,
+        "filter": { "plan": "{{ inputs.planTier }}" }
+      }
+
+  - id: answer-with-citations
+    type: openai.chat
+    model: "{{ vars.answerModel }}"
+    prompt: |
+      You are a support agent for a B2B billing SaaS. Account: {{ inputs.accountId }}.
+      Use ONLY the retrieved snippets below. If the answer is not in snippets, say you will escalate.
+      End with "Sources:" and list doc titles used.
+
+      Question: {{ inputs.customerQuestion }}
+
+      Retrieved snippets:
+      {{ outputs.retrieve-chunks.body }}
+
+  - id: log-to-crm
+    type: http.request
+    method: POST
+    url: "https://crm.example.com/accounts/{{ inputs.accountId }}/ai-replies"
+    body: |
+      {
+        "question": "{{ inputs.customerQuestion }}",
+        "answer": "{{ outputs.answer-with-citations.response }}",
+        "tokensUsed": {{ outputs.answer-with-citations.tokensUsed }},
+        "costUsd": {{ outputs.answer-with-citations.costUsd }}
+      }
