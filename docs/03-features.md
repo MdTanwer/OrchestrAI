@@ -1,5 +1,7 @@
 # 03 — Features
 
+> **See it in practice:** [Examples](./15-examples.md) and [`examples/`](../examples/) show each capability as a runnable YAML workflow.
+
 ## Feature Categories
 
 1. Flow Management
@@ -87,6 +89,8 @@ Count input and output tokens per task.
 ### F3.4 — Cost Calculation
 
 Real-time cost in USD per execution.
+
+See [`examples/08-cost-tracking.yaml`](../examples/08-cost-tracking.yaml) and [Examples — Cost Tracking](./15-examples.md#8-cost-tracking--tokens-and-usd-per-step-and-per-run).
 
 ### F3.5 — Prompt Templates
 

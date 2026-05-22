@@ -1,0 +1,40 @@
+# Resilience: primary OpenAI task with Anthropic fallback on rate limit / timeout.
+
+id: extract-with-fallback
+namespace: examples.resilience
+
+description: "Extract structured entities; fall back to Claude if OpenAI is unavailable."
+
+inputs:
+  - id: document
+    type: STRING
+    required: true
+
+tasks:
+  - id: extract-entities
+    type: openai.chat
+    model: gpt-4o
+    timeout: "2m"
+    retry:
+      maxAttempts: 2
+      backoff: exponential
+      initialDelay: "2s"
+    prompt: |
+      Extract people, organizations, and dates from the text below.
+      Return valid JSON: { "people": [], "organizations": [], "dates": [] }
+
+      Text:
+      {{ inputs.document }}
+    fallback:
+      type: anthropic.chat
+      model: claude-3-5-sonnet
+      prompt: |
+        Extract people, organizations, and dates from the text below.
+        Return valid JSON: { "people": [], "organizations": [], "dates": [] }
+
+        Text:
+        {{ inputs.document }}
+      fallbackOn:
+        - RATE_LIMIT
+        - TIMEOUT
+        - PROVIDER_ERROR

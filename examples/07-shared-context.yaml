@@ -1,0 +1,32 @@
+# Shared conversation: two agents, same contextKey, different models.
+
+id: interview-assistant
+namespace: examples.context
+
+description: "Interviewer agent asks questions; coach agent continues the same thread."
+
+inputs:
+  - id: candidateName
+    type: STRING
+    required: true
+  - id: role
+    type: STRING
+    required: true
+
+tasks:
+  - id: opening-questions
+    type: openai.chat
+    contextKey: "interview-{{ inputs.candidateName }}"
+    model: gpt-4o
+    prompt: |
+      You are conducting a phone screen for {{ inputs.role }}.
+      Candidate: {{ inputs.candidateName }}.
+      Ask three behavioral interview questions. Number them 1–3.
+
+  - id: follow-up-coach
+    type: anthropic.chat
+    contextKey: "interview-{{ inputs.candidateName }}"
+    model: claude-3-5-sonnet
+    prompt: |
+      Using the conversation so far, suggest two follow-up probes the interviewer
+      should ask if answers are vague. Be specific to what the candidate likely said.

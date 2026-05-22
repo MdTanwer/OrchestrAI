@@ -1,0 +1,60 @@
+# Parallel checks + conditional publish: draft → (toxicity + spelling) → branch.
+# Shows core.parallel, core.if, and wiring outputs from nested parallel tasks.
+
+id: content-moderation
+namespace: examples.production
+
+description: "Polish user content, run safety checks in parallel, then publish or alert."
+
+inputs:
+  - id: articleText
+    type: STRING
+    required: true
+    description: "Raw text to moderate and optionally publish."
+
+variables:
+  defaultModel: gpt-4o
+  minConfidence: 0.85
+
+tasks:
+  - id: polish-draft
+    type: openai.chat
+    model: "{{ vars.defaultModel }}"
+    prompt: "Proofread and polish this text. Return only the revised body:\n\n{{ inputs.articleText }}"
+
+  - id: safety-checks
+    type: core.parallel
+    tasks:
+      - id: toxicity
+        type: openai.moderation
+        input: "{{ outputs.polish-draft.response }}"
+      - id: spelling
+        type: custom.spellcheck
+        text: "{{ outputs.polish-draft.response }}"
+
+  - id: moderation-gate
+    type: core.if
+    condition: "{{ outputs.safety-checks.toxicity.flagged || outputs.safety-checks.spelling.errors > 3 }}"
+    then:
+      - id: notify-reject
+        type: http.request
+        method: POST
+        url: "https://alerts.example.com/reject"
+        body: |
+          {
+            "reason": "moderation_failed",
+            "draft": "{{ outputs.polish-draft.response }}"
+          }
+    else:
+      - id: publish
+        type: http.request
+        method: POST
+        url: "https://api.example.com/v1/content"
+        body: "{{ outputs.polish-draft.response }}"
+
+onFailure:
+  - id: alert-ops
+    type: http.request
+    method: POST
+    url: "https://hooks.slack.com/services/EXAMPLE/ops-alerts"
+    body: "content-moderation failed for execution {{ execution.id }}"

@@ -1,0 +1,96 @@
+# Cost & token tracking across a multi-step LLM pipeline.
+#
+# How it works (no extra YAML per task):
+# - Every AI plugin (openai.chat, anthropic.chat, etc.) records tokensUsed, promptTokens,
+#   completionTokens, costUsd, and model on each TaskRun.
+# - The execution engine rolls those up into executions.total_cost_usd and total_tokens.
+# - Dashboard, REST API, and SSE streams expose per-task and per-run totals.
+#
+# This flow shows:
+# - labels for cost attribution in GET /metrics/costs?labels.team=...
+# - variables.maxBudgetUsd for a soft budget check after all agents finish
+# - Reading per-step cost via {{ outputs.<taskId>.costUsd }} in a later task
+
+id: blog-post-pipeline
+namespace: examples.cost-tracking
+
+description: "Draft, refine, and shorten a blog post—with token/cost metrics on every LLM step."
+
+labels:
+  team: content
+  cost-center: marketing-llm
+
+inputs:
+  - id: brief
+    type: STRING
+    required: true
+    description: "One-paragraph brief for the blog post."
+
+variables:
+  draftModel: gpt-4o
+  editorModel: gpt-4o-mini
+  maxBudgetUsd: 0.25
+  # Approximate per-1K-token rates used by plugins for USD estimate (implementation detail)
+  # gpt-4o: ~$0.005 in / $0.015 out — see plugin pricing tables
+
+tasks:
+  - id: draft
+    type: openai.chat
+    model: "{{ vars.draftModel }}"
+    maxTokens: 1200
+    prompt: |
+      Write a 400-word blog draft from this brief. Use markdown headings.
+
+      Brief: {{ inputs.brief }}
+
+  - id: refine
+    type: openai.chat
+    model: "{{ vars.editorModel }}"
+    maxTokens: 1200
+    prompt: |
+      Improve clarity and tone. Keep length similar.
+
+      Draft:
+      {{ outputs.draft.response }}
+
+  - id: shorten
+    type: openai.chat
+    model: "{{ vars.editorModel }}"
+    maxTokens: 800
+    prompt: |
+      Shorten to ~200 words. Keep the main argument.
+
+      Revised draft:
+      {{ outputs.refine.response }}
+
+  - id: budget-gate
+    type: core.if
+    description: "Alert if combined LLM cost for this run exceeds the flow budget."
+    condition: "{{ (outputs.draft.costUsd + outputs.refine.costUsd + outputs.shorten.costUsd) > vars.maxBudgetUsd }}"
+    then:
+      - id: alert-over-budget
+        type: http.request
+        method: POST
+        url: "https://alerts.example.com/llm-budget"
+        body: |
+          {
+            "flow": "blog-post-pipeline",
+            "namespace": "examples.cost-tracking",
+            "budgetUsd": {{ vars.maxBudgetUsd }},
+            "actualUsd": {{ outputs.draft.costUsd + outputs.refine.costUsd + outputs.shorten.costUsd }},
+            "breakdown": {
+              "draft": {{ outputs.draft.costUsd }},
+              "refine": {{ outputs.refine.costUsd }},
+              "shorten": {{ outputs.shorten.costUsd }}
+            },
+            "tokens": {
+              "draft": {{ outputs.draft.tokensUsed }},
+              "refine": {{ outputs.refine.tokensUsed }},
+              "shorten": {{ outputs.shorten.tokensUsed }}
+            }
+          }
+    else:
+      - id: log-within-budget
+        type: custom.logger
+        message: |
+          Run within budget (${{ outputs.draft.costUsd + outputs.refine.costUsd + outputs.shorten.costUsd }} / ${{ vars.maxBudgetUsd }})

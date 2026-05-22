@@ -1,0 +1,26 @@
+# Minimal flow: one input, one LLM task.
+# Use this to verify parsing, plugins, and execution before building complex pipelines.
+
+id: hello-agent
+namespace: examples.getting-started
+
+description: "Answer a user question with a single chat completion."
+
+inputs:
+  - id: question
+    type: STRING
+    required: true
+    description: "Question to send to the model."
+
+variables:
+  model: gpt-4o
+
+tasks:
+  - id: answer
+    type: openai.chat
+    model: "{{ vars.model }}"
+    prompt: |
+      You are a concise assistant.
+      Answer the following question in two or three sentences.
+
+      Question: {{ inputs.question }}

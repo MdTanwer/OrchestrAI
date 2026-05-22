@@ -1,0 +1,8 @@
+{
+  "response": "Here is your generated blog draft in markdown...",
+  "model": "gpt-4o",
+  "tokensUsed": 1523,
+  "promptTokens": 245,
+  "completionTokens": 1278,
+  "costUsd": 0.04569
+}

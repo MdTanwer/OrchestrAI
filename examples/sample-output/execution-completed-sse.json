@@ -1,0 +1,12 @@
+{
+  "state": "SUCCESS",
+  "executionId": "550e8400-e29b-41d4-a716-446655440000",
+  "totalCostUsd": 0.08942,
+  "totalTokens": 3841,
+  "durationMs": 12450,
+  "taskCosts": [
+    { "taskId": "draft", "model": "gpt-4o", "tokensUsed": 1523, "costUsd": 0.04569 },
+    { "taskId": "refine", "model": "gpt-4o-mini", "tokensUsed": 1188, "costUsd": 0.02873 },
+    { "taskId": "shorten", "model": "gpt-4o-mini", "tokensUsed": 1130, "costUsd": 0.01500 }
+  ]
+}

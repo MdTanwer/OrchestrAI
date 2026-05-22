@@ -1,0 +1,52 @@
+# Human-in-the-loop: generate marketing copy, pause for approval, then publish.
+
+id: marketing-copy-approval
+namespace: examples.hitl
+
+description: "Generate ad copy, wait for human approval, publish only if approved."
+
+inputs:
+  - id: productName
+    type: STRING
+    required: true
+  - id: audience
+    type: STRING
+    required: true
+    defaults: "general consumers"
+
+tasks:
+  - id: generate-copy
+    type: openai.chat
+    model: gpt-4o
+    prompt: |
+      Write three short ad headlines (max 12 words each) for {{ inputs.productName }}.
+      Audience: {{ inputs.audience }}.
+      Format as a numbered list.
+
+  - id: legal-review
+    type: human.approval
+    message: "Approve these headlines for {{ inputs.productName }}?"
+    data: "{{ outputs.generate-copy.response }}"
+    approvers:
+      - marketing-lead@example.com
+      - legal@example.com
+    timeout: "24h"
+    onTimeout: REJECT
+
+  - id: publish-approved
+    type: http.request
+    if: "{{ outputs.legal-review.approved }}"
+    method: POST
+    url: "https://cms.example.com/v1/campaigns/draft"
+    body: |
+      {
+        "product": "{{ inputs.productName }}",
+        "headlines": "{{ outputs.generate-copy.response }}"
+      }
+
+  - id: notify-rejected
+    type: http.request
+    if: "{{ !outputs.legal-review.approved }}"
+    method: POST
+    url: "https://hooks.slack.com/services/EXAMPLE/marketing"
+    body: "Headlines for {{ inputs.productName }} were rejected or timed out."

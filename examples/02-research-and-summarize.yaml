@@ -1,0 +1,35 @@
+# Sequential multi-agent chain: Researcher → Editor.
+# Agent B consumes Agent A's output via {{ outputs.<taskId>.response }}.
+# Each LLM step also records tokensUsed and costUsd — see examples/08-cost-tracking.yaml.
+
+id: research-and-summarize
+namespace: examples.multi-agent
+
+description: "Research a topic, then produce an executive summary."
+
+inputs:
+  - id: topic
+    type: STRING
+    required: true
+    description: "Topic to research and summarize."
+
+variables:
+  researchModel: gpt-4o
+  summaryModel: claude-3-5-sonnet
+
+tasks:
+  - id: research
+    type: openai.chat
+    model: "{{ vars.researchModel }}"
+    prompt: |
+      Research the topic below. List 5–7 bullet points with facts only—no preamble.
+      Topic: {{ inputs.topic }}
+
+  - id: summarize
+    type: anthropic.chat
+    model: "{{ vars.summaryModel }}"
+    prompt: |
+      Turn the research notes into a 150-word executive summary for a busy stakeholder.
+
+      Research notes:
+      {{ outputs.research.response }}

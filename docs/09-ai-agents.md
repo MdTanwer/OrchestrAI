@@ -46,6 +46,8 @@ Every AI plugin reports:
 
 Costs are aggregated at the execution level.
 
+**Example flow:** [`examples/08-cost-tracking.yaml`](../examples/08-cost-tracking.yaml) — three LLM steps, budget gate, and sample JSON in [`examples/sample-output/`](../examples/sample-output/). Walkthrough: [15 — Examples](./15-examples.md#8-cost-tracking--tokens-and-usd-per-step-and-per-run).
+
 ---
 
 ## Model Fallback Pattern

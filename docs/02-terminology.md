@@ -138,6 +138,10 @@ The input text sent to an LLM.
 
 A unit of text (~4 characters) used by LLMs. Tokens drive cost.
 
+### Cost (TaskRun & Execution)
+
+Each AI TaskRun records `tokensUsed` and `costUsd` (estimated from the provider's model pricing). The platform rolls these up to `totalCostUsd` and `totalTokens` on the Execution. Visible in the dashboard, REST API, and SSE streams—not configured manually in YAML. See [Examples — Cost Tracking](./15-examples.md#8-cost-tracking--tokens-and-usd-per-step-and-per-run).
+
 ### Context Window
 
 The maximum tokens an LLM can process at once.

@@ -190,6 +190,31 @@ All dynamic evaluation in OrchestrAI is enclosed in `{{ }}` brackets and compute
     *   `{{ uuid() }}` - Random UUID
     *   `{{ env('SYS_ENV_VAR') }}` - Retrieves environment variable safely from host context
 
+### AI Task Outputs (Cost & Token Metrics)
+
+Every AI plugin (`openai.chat`, `anthropic.chat`, `google.gemini`, `ollama.chat`, etc.) attaches usage metrics to its output. Downstream tasks and expressions can read them; the execution engine sums them into `total_cost_usd` and `total_tokens` on the run.
+
+| Output field | Type | Description |
+|--------------|------|-------------|
+| `response` | string | Model text (or structured JSON if requested) |
+| `model` | string | Model id used for pricing |
+| `tokensUsed` | int | Total tokens (prompt + completion) |
+| `promptTokens` | int | Input tokens |
+| `completionTokens` | int | Output tokens |
+| `costUsd` | decimal | Estimated USD for this TaskRun |
+
+**Expression examples:**
+
+```yaml
+# Log or branch on a prior step's cost
+condition: "{{ outputs.draft.costUsd > 0.10 }}"
+
+# Sum costs across steps (see examples/08-cost-tracking.yaml)
+condition: "{{ (outputs.draft.costUsd + outputs.refine.costUsd) > vars.maxBudgetUsd }}"
+```
+
+Indirect cost control: set `maxTokens` on the task config. Flow-level `labels` (e.g. `cost-center: marketing`) filter metrics in `GET /metrics/costs`. See [Examples — Cost Tracking](./15-examples.md#8-cost-tracking--tokens-and-usd-per-step-and-per-run).
+
 ### Secure Secret Resolution Pattern
 To prevent credential leaks in Kafka pipelines, **never use secrets as JEXL expressions** (e.g. `apiKey: "{{ secret('X') }}"` is deprecated). Instead, plugins automatically read API keys directly from the worker environment context, or map custom keys securely:
 

@@ -1,0 +1,75 @@
+# Router pattern: classify once, then run exactly one specialist agent branch.
+
+id: support-ticket-router
+namespace: examples.routing
+
+description: "Classify a support ticket and route it to billing, technical, or general support."
+
+inputs:
+  - id: ticketBody
+    type: STRING
+    required: true
+  - id: customerId
+    type: STRING
+    required: true
+
+tasks:
+  - id: classify
+    type: openai.chat
+    model: gpt-4o
+    prompt: |
+      Classify this support ticket into exactly one category: billing, technical, or general.
+      Reply with only the category word (lowercase).
+
+      Ticket:
+      {{ inputs.ticketBody }}
+
+  - id: route
+    type: core.if
+    condition: "{{ outputs.classify.response == 'billing' }}"
+    then:
+      - id: billing-agent
+        type: openai.chat
+        model: gpt-4o
+        prompt: |
+          You are a billing specialist. Draft a helpful reply for customer {{ inputs.customerId }}.
+
+          Ticket:
+          {{ inputs.ticketBody }}
+      - id: save-reply
+        type: http.request
+        method: POST
+        url: "https://crm.example.com/tickets/{{ inputs.customerId }}/draft-reply"
+        body: "{{ outputs.billing-agent.response }}"
+    else:
+      - id: technical-or-general
+        type: core.if
+        condition: "{{ outputs.classify.response == 'technical' }}"
+        then:
+          - id: technical-agent
+            type: openai.chat
+            model: gpt-4o
+            prompt: |
+              You are a technical support engineer. Draft a troubleshooting reply.
+
+              Ticket:
+              {{ inputs.ticketBody }}
+          - id: save-reply
+            type: http.request
+            method: POST
+            url: "https://crm.example.com/tickets/{{ inputs.customerId }}/draft-reply"
+            body: "{{ outputs.technical-agent.response }}"
+        else:
+          - id: general-agent
+            type: openai.chat
+            model: gpt-4o
+            prompt: |
+              You are general support. Draft a friendly, helpful reply.
+
+              Ticket:
+              {{ inputs.ticketBody }}
+          - id: save-reply
+            type: http.request
+            method: POST
+            url: "https://crm.example.com/tickets/{{ inputs.customerId }}/draft-reply"
+            body: "{{ outputs.general-agent.response }}"

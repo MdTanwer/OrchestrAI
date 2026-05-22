@@ -90,3 +90,9 @@ OrchestrAI draws inspiration from:
 - **GitHub Actions** — Developer experience
 
 We are not a clone — we are AI-first, Java-based, and distributed.
+
+---
+
+## See example workflows
+
+Concrete flows (hello agent, multi-agent chains, moderation, routing, fallback, human approval, **cost tracking**) live in [`examples/`](../examples/) with a guided walkthrough in [15 — Examples](./15-examples.md).
