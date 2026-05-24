@@ -14,7 +14,7 @@ Standard LLM call with prompt → response.
 
 ### 2. Tool Calling
 
-LLM decides which tools to invoke.
+LLM decides which tools to invoke. Example: [`14-sales-agent-with-tools.yaml`](../examples/14-sales-agent-with-tools.yaml).
 
 ### 3. Multi-turn Conversation
 
@@ -26,7 +26,35 @@ Search documents → inject into prompt.
 
 ### 5. Streaming
 
-Stream tokens as they're generated.
+Stream completion **tokens to the client in real time** via SSE while the worker still calls the provider's streaming API. The final text and usage metrics are stored on the TaskRun when the model finishes—downstream tasks use `outputs.<taskId>.response` as usual.
+
+**YAML** — set `stream: true` on any AI chat plugin:
+
+```yaml
+- id: stream-answer
+  type: openai.chat
+  model: gpt-4o
+  stream: true
+  prompt: "{{ inputs.userMessage }}"
+```
+
+**Client** — after `POST .../execute`, open:
+
+```
+GET /v1/executions/{executionId}/stream
+Accept: text/event-stream
+```
+
+Listen for `token_delta` (append `delta` to the UI) and `token_done` (final `response`, `tokensUsed`, `costUsd`). See [API Design — Token streaming (SSE)](./10-api-design.md#token-streaming-sse) and [`examples/13-streaming-copilot.yaml`](../examples/13-streaming-copilot.yaml).
+
+| Event | When | Use in UI |
+|-------|------|-----------|
+| `token_delta` | During `stream: true` task | Typing effect / partial markdown |
+| `token_done` | Model finished | Finalize message + show usage |
+| `task_completed` | Task closed | Enable follow-up actions |
+| `log` | Any task | Debug panel |
+
+**Example flow:** [`examples/13-streaming-copilot.yaml`](../examples/13-streaming-copilot.yaml) — stream to widget, then HTTP persist full transcript. Samples: [`token-stream-sse.txt`](../examples/sample-output/token-stream-sse.txt), [`streaming-client.md`](../examples/sample-output/streaming-client.md).
 
 ---
 
@@ -125,25 +153,66 @@ Execution pauses at `human.approval` and resumes on user action.
 
 ---
 
-## Tool Calling Pattern
+## Tool Calling — LLM-invoked subtasks
 
-```yaml
-- id: agent-with-tools
-  type: openai.chat
-  model: gpt-4
-  prompt: "{{ inputs.userQuery }}"
-  tools:
-    - name: searchWeb
-      description: "Search the web"
-      type: http.request
-      url: "https://api.search.com"
-    - name: queryDb
-      description: "Query database"
-      type: postgres.query
-      sql: "SELECT * FROM users WHERE..."
+An agent task can declare **tools**: each tool is a normal OrchestrAI plugin configuration (e.g. `http.request`, `postgres.query`) that the model may invoke with structured arguments. The execution engine runs the tool loop—you do not write retry/orchestration code in your app.
+
+```
+User message
+    → LLM (with tool schemas)
+    → tool_call(s) → Worker runs nested plugin(s) using {{ tool.args.* }}
+    → tool results fed back to LLM
+    → (repeat up to maxToolRounds)
+    → final natural-language answer
 ```
 
-The LLM decides which tool to call; the engine executes the tool and returns the result.
+**YAML:**
+
+```yaml
+- id: sales-agent
+  type: openai.chat
+  model: gpt-4o
+  maxToolRounds: 5
+  prompt: "{{ inputs.userMessage }}"
+  tools:
+    - name: lookup_account
+      description: "Fetch CRM account by id"
+      parameters:
+        type: object
+        required: [accountId]
+        properties:
+          accountId: { type: string }
+      type: http.request
+      method: GET
+      url: "https://crm.example.com/v1/accounts/{{ tool.args.accountId }}"
+```
+
+| Field | Description |
+|-------|-------------|
+| `tools[].name` | Function name exposed to the model |
+| `tools[].description` | When the model should use this tool |
+| `tools[].parameters` | JSON Schema for arguments the model fills |
+| `tools[].type` + … | Plugin config for the subtask (same fields as a standalone task) |
+| `maxToolRounds` | Cap on LLM ↔ tool iterations (default 10) |
+| `{{ tool.args.<field> }}` | Resolved from the model's tool_call arguments |
+
+**Task output** includes the final answer plus audit metadata:
+
+```json
+{
+  "response": "...",
+  "toolRounds": 2,
+  "toolCalls": [{ "name": "lookup_account", "args": {}, "taskRunId": "uuid", "durationMs": 142 }],
+  "tokensUsed": 2184,
+  "costUsd": 0.018
+}
+```
+
+Sample: [`tool-calling-roundtrip.json`](../examples/sample-output/tool-calling-roundtrip.json). SSE: [`tool-calling-sse.txt`](../examples/sample-output/tool-calling-sse.txt).
+
+**Example flow:** [`examples/14-sales-agent-with-tools.yaml`](../examples/14-sales-agent-with-tools.yaml) — CRM lookup, open invoices, create follow-up task. Walkthrough: [15 — Examples](./15-examples.md#14-sales-rep-copilot--tool-calling).
+
+**vs fixed pipelines:** In `02` or `09`, tasks run in a fixed order. Tool calling lets the **model decide** which integrations to hit and with which parameters.
 
 ---
 

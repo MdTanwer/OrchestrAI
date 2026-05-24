@@ -1,0 +1,40 @@
+{
+  "taskId": "sales-agent",
+  "model": "gpt-4o",
+  "toolRounds": 2,
+  "toolCalls": [
+    {
+      "round": 1,
+      "name": "lookup_account",
+      "args": { "accountId": "acc_1042" },
+      "taskRunId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "durationMs": 142,
+      "outputSummary": { "name": "Acme Corp", "arrUsd": 48000, "csm": "jlee@example.com" }
+    },
+    {
+      "round": 1,
+      "name": "list_open_invoices",
+      "args": { "accountId": "acc_1042" },
+      "taskRunId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "durationMs": 98,
+      "outputSummary": { "openTotalUsd": 12000, "invoiceIds": ["inv_901", "inv_902"] }
+    },
+    {
+      "round": 2,
+      "name": "create_followup_task",
+      "args": {
+        "accountId": "acc_1042",
+        "title": "Discuss payment plan for open $12k",
+        "dueDate": "2026-05-29"
+      },
+      "taskRunId": "f0e1d2c3-b4a5-6978-90ab-cdef12345678",
+      "durationMs": 201,
+      "outputSummary": { "taskId": "tsk_5512", "status": "created" }
+    }
+  ],
+  "response": "Acme Corp (acc_1042) has $12,000 across invoices inv_901 and inv_902. I created follow-up task tsk_5512 due 2026-05-29 for you to discuss a payment plan.",
+  "tokensUsed": 2184,
+  "promptTokens": 1650,
+  "completionTokens": 534,
+  "costUsd": 0.01842
+}

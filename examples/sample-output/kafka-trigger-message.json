@@ -1,0 +1,31 @@
+{
+  "topic": "ecommerce.orders.created",
+  "partition": 0,
+  "offset": 9841201,
+  "key": "ord_8f2a91",
+  "timestamp": "2026-05-22T15:44:12Z",
+  "value": {
+    "orderId": "ord_8f2a91",
+    "customerEmail": "buyer@acme.com",
+    "shipToCountry": "US",
+    "lineItems": [
+      { "sku": "SKU-441", "qty": 2, "name": "Wireless Hub" },
+      { "sku": "SKU-992", "qty": 1, "name": "Glass Monitor Stand" }
+    ],
+    "createdAt": "2026-05-22T15:44:11Z"
+  },
+  "headers": {
+    "content-type": "application/json",
+    "source": "storefront-checkout"
+  },
+  "_orchestrai": {
+    "triggerId": "on-order-created",
+    "consumerGroup": "orchestrai-fulfillment-v1",
+    "mappedInputs": {
+      "orderId": "ord_8f2a91",
+      "customerEmail": "buyer@acme.com",
+      "lineItems": [{ "sku": "SKU-441", "qty": 2, "name": "Wireless Hub" }, { "sku": "SKU-992", "qty": 1, "name": "Glass Monitor Stand" }],
+      "shipToCountry": "US"
+    }
+  }
+}

@@ -1,0 +1,105 @@
+# Real use case: Legal/compliance — review many contracts in one execution; work spreads across workers via Kafka.
+# Goals: F2.8 distributed execution | G5 performance | Value prop: scale horizontally
+#
+# HOW THIS MAPS TO KAFKA (same YAML whether you run 1 or 10 workers):
+#   1. API publishes Execution → Kafka topic `executions`
+#   2. Executor dispatches ALL nested tasks under `review-in-parallel` → topic `task-runs`
+#   3. Worker pool competes for messages — each contract review may run on a different JVM
+#   4. Workers publish TaskResult → `task-results`; Executor merges and runs `compliance-summary`
+#
+# Scale workers: docker-compose deploy.replicas or K8s orchestrai-worker replicas (see docs/11-deployment.md)
+# Related doc: examples/DISTRIBUTED.md
+
+id: distributed-contract-review
+namespace: production.legal
+
+description: "Score multiple vendor contracts in parallel—designed for multi-worker Kafka dispatch."
+
+labels:
+  team: legal
+  execution-mode: distributed
+  kafka-topics: task-runs
+
+inputs:
+  - id: reviewBatchId
+    type: STRING
+    required: true
+  - id: contracts
+    type: JSON
+    required: true
+    description: |
+      Array of { "contractId", "vendorName", "text" } — e.g. 4 items from your CLM export.
+
+variables:
+  reviewModel: gpt-4o-mini
+  riskThreshold: 7
+
+tasks:
+  - id: register-batch
+    type: http.request
+    method: POST
+    url: "https://clm.example.com/v1/review-batches"
+    body: |
+      {
+        "batchId": "{{ inputs.reviewBatchId }}",
+        "contractCount": {{ inputs.contracts.size() }},
+        "workerPool": "legal-review"
+      }
+
+  - id: review-in-parallel
+    type: core.parallel
+    description: |
+      Each child task is a separate Kafka message on `task-runs`.
+      With 3+ worker replicas, expect near-linear speedup until LLM rate limits.
+    tasks:
+      - id: review-contract-1
+        type: openai.chat
+        model: "{{ vars.reviewModel }}"
+        prompt: |
+          Score liability risk 1-10 for this contract. Reply with JSON: { "contractId", "score", "summary" }
+          Contract: {{ inputs.contracts[0] }}
+
+      - id: review-contract-2
+        type: openai.chat
+        model: "{{ vars.reviewModel }}"
+        prompt: |
+          Score liability risk 1-10 for this contract. Reply with JSON: { "contractId", "score", "summary" }
+          Contract: {{ inputs.contracts[1] }}
+
+      - id: review-contract-3
+        type: openai.chat
+        model: "{{ vars.reviewModel }}"
+        prompt: |
+          Score liability risk 1-10 for this contract. Reply with JSON: { "contractId", "score", "summary" }
+          Contract: {{ inputs.contracts[2] }}
+
+      - id: review-contract-4
+        type: openai.chat
+        model: "{{ vars.reviewModel }}"
+        prompt: |
+          Score liability risk 1-10 for this contract. Reply with JSON: { "contractId", "score", "summary" }
+          Contract: {{ inputs.contracts[3] }}
+
+  - id: compliance-summary
+    type: openai.chat
+    model: gpt-4o
+    description: "Runs on Executor after ALL parallel workers return (task-results merged)."
+    prompt: |
+      Summarize this parallel review batch for the legal lead.
+      Flag any score >= {{ vars.riskThreshold }}.
+      Results:
+      - {{ outputs.review-in-parallel.review-contract-1.response }}
+      - {{ outputs.review-in-parallel.review-contract-2.response }}
+      - {{ outputs.review-in-parallel.review-contract-3.response }}
+      - {{ outputs.review-in-parallel.review-contract-4.response }}
+
+  - id: publish-batch-result
+    type: http.request
+    method: PATCH
+    url: "https://clm.example.com/v1/review-batches/{{ inputs.reviewBatchId }}"
+    body: |
+      {
+        "status": "completed",
+        "summary": "{{ outputs.compliance-summary.response }}",
+        "distributed": true
+      }

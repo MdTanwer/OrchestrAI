@@ -112,12 +112,35 @@ Traditional workflow engines block the parent thread using tools like `Completab
 
 ---
 
+## `core.foreach` (batch iterations)
+
+1.  The Executor evaluates `items` to a JSON array. An empty array marks the foreach task `SUCCESS` with `count: 0`.
+2.  For each element, it creates a child scope and runs nested `tasks` sequentially (same as a mini-flow).
+3.  Nested tasks resolve `{{ taskrun.value }}`, `{{ taskrun.index }}`, and `{{ taskrun.total }}`.
+4.  When all iterations finish, the engine aggregates `results`, `count`, and rolled-up token/cost metrics on the parent foreach TaskRun.
+
+Example: [`examples/15-churn-outreach-foreach.yaml`](../examples/15-churn-outreach-foreach.yaml).
+
+---
+
+## Tool-calling loop (AI agent tasks)
+
+For tasks with a `tools` list, the Worker does not complete after the first LLM response:
+
+1.  Call the provider with tool schemas; if the model returns `tool_calls`, resolve `{{ tool.args.* }}` and dispatch each tool as a child plugin execution (same sandbox as standalone tasks).
+2.  Append tool results to the conversation payload; call the model again.
+3.  Repeat until the model returns a final message without tool calls, or `maxToolRounds` is exceeded (task → `FAILED` with `TOOL_ROUND_LIMIT`).
+
+Each tool invocation creates a child `TaskRun` linked to the parent agent task for audit. Parent output includes `toolCalls[]` and `toolRounds`. See [`examples/14-sales-agent-with-tools.yaml`](../examples/14-sales-agent-with-tools.yaml).
+
+---
+
 ## Expression & Secret Resolution
 
 OrchestrAI resolves dynamic inputs at the **last possible millisecond** to protect system performance and security.
 
 ### JEXL Expression Resolution
-Dynamic inputs (e.g. `{{ outputs.task1.response }}`) are evaluated using **Apache Commons JEXL** during task dispatching. The Executor pulls execution inputs, variables, and previous task outputs from the database context map, interpolates the string, and formats the output.
+Dynamic inputs (e.g. `{{ outputs.task1.response }}`, `{{ tool.args.accountId }}`) are evaluated using **Apache Commons JEXL** during task dispatching. The Executor pulls execution inputs, variables, and previous task outputs from the database context map, interpolates the string, and formats the output.
 
 ### Secure Secret Reference Resolution (Critical Security Pattern)
 To prevent secret keys from leaking, the Executor **never decrypts secrets during task resolution**.

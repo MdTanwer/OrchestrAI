@@ -1,0 +1,45 @@
+{
+  "taskId": "personalize-outreach",
+  "type": "core.foreach",
+  "count": 3,
+  "totalCostUsd": 0.0142,
+  "totalTokens": 1840,
+  "results": [
+    {
+      "index": 0,
+      "value": {
+        "accountId": "acc_201",
+        "companyName": "Northwind Traders",
+        "ownerEmail": "csm-jane@example.com",
+        "healthScore": 42,
+        "mrrUsd": 2400
+      },
+      "outputs": {
+        "draft-save-email": {
+          "response": "Subject: Checking in on Northwind\n\nHi team, we noticed...",
+          "tokensUsed": 312,
+          "costUsd": 0.0048
+        },
+        "log-crm-touch": { "statusCode": 201 }
+      }
+    },
+    {
+      "index": 1,
+      "value": {
+        "accountId": "acc_318",
+        "companyName": "Contoso Ltd",
+        "ownerEmail": "csm-bob@example.com",
+        "healthScore": 38,
+        "mrrUsd": 8900
+      },
+      "outputs": {
+        "draft-save-email": {
+          "response": "Subject: Contoso — quick sync?\n\nHello...",
+          "tokensUsed": 298,
+          "costUsd": 0.0045
+        },
+        "log-crm-touch": { "statusCode": 201 }
+      }
+    }
+  ]
+}

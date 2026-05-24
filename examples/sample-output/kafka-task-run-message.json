@@ -1,0 +1,28 @@
+{
+  "topic": "task-runs",
+  "partition": 2,
+  "key": "execution:550e8400-e29b-41d4-a716-446655440000",
+  "payload": {
+    "taskRunId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "executionId": "550e8400-e29b-41d4-a716-446655440000",
+    "flowId": "distributed-contract-review",
+    "namespace": "production.legal",
+    "taskId": "review-contract-2",
+    "taskType": "openai.chat",
+    "parentTaskId": "review-in-parallel",
+    "attempt": 1,
+    "workerGroup": "default",
+    "config": {
+      "model": "gpt-4o-mini",
+      "prompt": "Score liability risk 1-10 for this contract..."
+    },
+    "secrets": {
+      "OPENAI_API_KEY": "secret:OPENAI_API_KEY"
+    }
+  },
+  "consumedBy": {
+    "workerId": "worker-7f3a",
+    "hostname": "orchestrai-worker-2",
+    "replica": 2
+  }
+}

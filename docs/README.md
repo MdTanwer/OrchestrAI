@@ -46,6 +46,8 @@ See [Overview — Value Proposition](./00-overview.md#value-proposition) for the
 | 15 | [Examples](./15-examples.md) | What we build — sample workflows |
 | — | [`examples/`](../examples/) | Production-style YAML flows |
 | — | [`examples/GOALS.md`](../examples/GOALS.md) | Examples ↔ vision & goals |
+| — | [`examples/DISTRIBUTED.md`](../examples/DISTRIBUTED.md) | Kafka & multi-worker scaling |
+| — | [`examples/17-order-fulfillment-kafka-trigger.yaml`](../examples/17-order-fulfillment-kafka-trigger.yaml) | Kafka event trigger demo |
 
 ---
 

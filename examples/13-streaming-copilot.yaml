@@ -1,0 +1,65 @@
+# Real use case: Customer-facing chat widget — tokens stream to the browser via SSE while the flow runs.
+# Goals: G3 observability | G6 UX without polling | AI streaming (F3.9)
+#
+# Client integration (after POST /execute returns executionId):
+#   GET /v1/executions/{executionId}/stream
+#   Accept: text/event-stream
+# The API multiplexes token_delta events for any task with stream: true.
+#
+# Downstream tasks still receive the full outputs.stream-answer.response once the model finishes.
+
+id: streaming-product-copilot
+namespace: production.product
+
+description: "Stream the answer to the in-app copilot; persist the final transcript when complete."
+
+labels:
+  team: product
+  surface: in-app-chat
+  streaming: enabled
+
+inputs:
+  - id: sessionId
+    type: STRING
+    required: true
+  - id: userMessage
+    type: STRING
+    required: true
+  - id: productContext
+    type: STRING
+    required: true
+    description: "Short product docs or feature flags summary for this session."
+
+variables:
+  model: gpt-4o
+  streamToClient: true
+
+tasks:
+  - id: stream-answer
+    type: openai.chat
+    model: "{{ vars.model }}"
+    stream: true
+    maxTokens: 1024
+    prompt: |
+      You are the in-app copilot for our SaaS product. Be concise.
+      Use only the product context below. If unsure, say so.
+
+      Product context:
+      {{ inputs.productContext }}
+
+      User: {{ inputs.userMessage }}
+
+  - id: persist-transcript
+    type: http.request
+    description: "Runs after streaming completes; full text available in outputs."
+    method: POST
+    url: "https://api.example.com/v1/chat/sessions/{{ inputs.sessionId }}/messages"
+    body: |
+      {
+        "role": "assistant",
+        "content": "{{ outputs.stream-answer.response }}",
+        "streamed": true,
+        "tokensUsed": {{ outputs.stream-answer.tokensUsed }},
+        "costUsd": {{ outputs.stream-answer.costUsd }},
+        "model": "{{ outputs.stream-answer.model }}"
+      }

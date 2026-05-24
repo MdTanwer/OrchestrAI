@@ -70,6 +70,8 @@
 - [ ] Implement `anthropic.chat` plugin
 - [ ] Implement `google.gemini` plugin
 - [ ] Token + cost tracking
+- [ ] SSE token streaming (`stream: true`, `GET /executions/{id}/stream`)
+- [ ] Tool-calling loop (`tools`, `maxToolRounds`, `tool_call_*` SSE)
 - [ ] Model fallback logic
 - [ ] Secret injection for API keys
 - [ ] Test with real API calls

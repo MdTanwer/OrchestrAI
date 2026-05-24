@@ -66,6 +66,8 @@ public class OpenAiChatPlugin implements Plugin<OpenAiChatConfig, OpenAiChatOutp
                 config.getTemperature()
             );
 
+            // When config.isStream(), publish token deltas to task-logs/SSE bus per chunk;
+            // still return full OpenAiChatOutput when the provider stream completes.
             return OpenAiChatOutput.builder()
                 .response(response.text())
                 .tokensUsed(response.tokens())
@@ -85,6 +87,7 @@ public class OpenAiChatConfig implements PluginConfig {
     @NotNull private String prompt;
     private Double temperature = 0.7;
     private Integer maxTokens = 2000;
+    private Boolean stream = false;       // Emit token_delta SSE events when true
     private String secretKeyRef = "OPENAI_API_KEY"; // Overridable key reference
 }
 ```

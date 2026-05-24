@@ -52,7 +52,9 @@ Run multiple tasks concurrently using `parallel` blocks.
 
 ### F2.4 — Loops
 
-Iterate over a list with `foreach`.
+Iterate over a list with `core.foreach` (`items` + nested `tasks`, `taskrun.value` per row).
+
+See [`examples/15-churn-outreach-foreach.yaml`](../examples/15-churn-outreach-foreach.yaml) and [Examples — Loops](./15-examples.md#15-churn-save-outreach--coreforeach).
 
 ### F2.5 — Retry Policies
 
@@ -68,7 +70,9 @@ Per-task and per-flow timeout configuration.
 
 ### F2.8 — Distributed Execution
 
-Workers pull tasks from Kafka — scale horizontally.
+Workers pull tasks from Kafka — scale horizontally. Same flow YAML with 1 or N workers; `core.parallel` dispatches multiple `task-runs` consumed by the pool.
+
+See [`examples/16-distributed-document-review.yaml`](../examples/16-distributed-document-review.yaml), [`examples/DISTRIBUTED.md`](../examples/DISTRIBUTED.md), and [Architecture](./05-architecture.md).
 
 ---
 
@@ -102,11 +106,19 @@ Share conversation context between agents.
 
 ### F3.7 — Tool Calling
 
-Let LLMs invoke other tasks as tools.
+Let LLMs invoke other tasks as tools (nested plugin configs + JSON Schema parameters).
+
+See [`examples/14-sales-agent-with-tools.yaml`](../examples/14-sales-agent-with-tools.yaml) and [Examples — Tool calling](./15-examples.md#14-sales-rep-copilot--tool-calling).
 
 ### F3.8 — Human-in-the-Loop
 
 Pause execution and wait for human approval.
+
+### F3.9 — Streaming Completions
+
+Stream LLM tokens to the client in real time via SSE (`stream: true` on AI tasks, `GET /executions/{id}/stream`).
+
+See [`examples/13-streaming-copilot.yaml`](../examples/13-streaming-copilot.yaml) and [Examples — Streaming](./15-examples.md#13-streaming-product-copilot--sse-token-stream).
 
 ---
 
@@ -154,7 +166,9 @@ Schedule flows on cron expressions.
 
 ### F5.4 — Kafka Triggers
 
-Start flows on Kafka events.
+Start flows on Kafka events (`type: kafka` on external topics — one message → one execution).
+
+See [`examples/17-order-fulfillment-kafka-trigger.yaml`](../examples/17-order-fulfillment-kafka-trigger.yaml) and [Examples — Kafka trigger](./15-examples.md#17-order-fulfillment--kafka-event-trigger).
 
 ### F5.5 — CLI Tool
 

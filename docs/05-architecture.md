@@ -145,3 +145,12 @@ All queues are implemented as highly partitionable Kafka topics:
 3.  **Late Secrets Injection:** Workers resolve credentials from dynamic context managers at execution time, preventing secrets from passing through database logs or Kafka queues in plaintext.
 4.  **Bulk Log Buffering:** Workers pipe logs as structured events over Kafka. The DB is decoupled from high-throughput worker logs, saving transactional performance.
 5.  **GraalVM Friendly:** Eliminating dynamic runtime reflection and standardizing on build-time metadata registry ensures 100% compatibility with Native compilation.
+
+---
+
+## Flow demo: distributed execution
+
+Architecture above is the reference model. For a **concrete flow** that benefits from multiple workers (parallel LLM tasks → multiple `task-runs` messages), see:
+
+- [`examples/16-distributed-document-review.yaml`](../examples/16-distributed-document-review.yaml)
+- [`examples/DISTRIBUTED.md`](../examples/DISTRIBUTED.md) — Kafka topics, scaling replicas, which YAML patterns fan out to workers

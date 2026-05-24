@@ -18,6 +18,12 @@ Production-style YAML workflows scoped to [Vision & Goals](../docs/01-vision-and
 | **On-call incident triage (webhook)** | [10-incident-triage.yaml](./10-incident-triage.yaml) | G2, G5, triggers |
 | **Monday ops digest (cron)** | [11-weekly-ops-digest.yaml](./11-weekly-ops-digest.yaml) | G3, cron |
 | **Vendor MSA review (HITL)** | [12-contract-review-hitl.yaml](./12-contract-review-hitl.yaml) | HITL, legal |
+| **In-app copilot (SSE token stream)** | [13-streaming-copilot.yaml](./13-streaming-copilot.yaml) | G3, F3.9 |
+| **Sales copilot (LLM tool calling)** | [14-sales-agent-with-tools.yaml](./14-sales-agent-with-tools.yaml) | G4, G6, F3.7 |
+| **Churn save batch (core.foreach)** | [15-churn-outreach-foreach.yaml](./15-churn-outreach-foreach.yaml) | F2.4, G6 |
+| **Distributed parallel review** | [16-distributed-document-review.yaml](./16-distributed-document-review.yaml) | F2.8, G5 |
+| **Kafka / multi-worker guide** | [DISTRIBUTED.md](./DISTRIBUTED.md) | Architecture ↔ YAML |
+| **Order fulfillment (Kafka trigger)** | [17-order-fulfillment-kafka-trigger.yaml](./17-order-fulfillment-kafka-trigger.yaml) | F5.4 |
 
 ## By pattern (quick reference)
 
@@ -26,6 +32,8 @@ Production-style YAML workflows scoped to [Vision & Goals](../docs/01-vision-and
 | Single agent | `01` |
 | Sequential chain | `02`, `08`, `09`, `12` |
 | Parallel + branch | `03`, `10` |
+| **Loop (`core.foreach`)** | `15` |
+| **Distributed (Kafka workers)** | `16`, [DISTRIBUTED.md](./DISTRIBUTED.md) |
 | Router | `04` |
 | Fallback / retry | `05`, `10` |
 | Human approval | `06`, `12` |
@@ -33,8 +41,11 @@ Production-style YAML workflows scoped to [Vision & Goals](../docs/01-vision-and
 | Cost / budget | `02`, `08`, `09`, `11` |
 | Webhook trigger | `04`, `10` |
 | Cron trigger | `11` |
+| **Kafka event trigger** | `17` |
 | External RAG (HTTP) | `09` |
+| **Streaming tokens (SSE)** | `13` |
+| **Tool calling (LLM → subtasks)** | `14` |
 
-**Sample metrics JSON:** [`sample-output/`](./sample-output/)
+**Sample payloads:** [`sample-output/`](./sample-output/) — metrics, [token SSE](sample-output/token-stream-sse.txt), [tool roundtrip](sample-output/tool-calling-roundtrip.json), [foreach results](sample-output/foreach-results.json), [Kafka task-run](sample-output/kafka-task-run-message.json), [Kafka trigger message](sample-output/kafka-trigger-message.json)
 
 **Walkthrough:** [docs/15-examples.md](../docs/15-examples.md)

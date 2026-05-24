@@ -1,0 +1,25 @@
+# SSE events during tool-calling task (GET /v1/executions/{id}/stream or /logs/stream)
+
+event: task_started
+data: {"taskId":"sales-agent","taskType":"openai.chat","toolCalling":true}
+
+event: tool_call_started
+data: {"taskId":"sales-agent","round":1,"name":"lookup_account","args":{"accountId":"acc_1042"}}
+
+event: tool_call_completed
+data: {"taskId":"sales-agent","round":1,"name":"lookup_account","taskRunId":"7c9e6679-7425-40de-944b-e07fc1f90ae7","durationMs":142}
+
+event: tool_call_started
+data: {"taskId":"sales-agent","round":1,"name":"list_open_invoices","args":{"accountId":"acc_1042"}}
+
+event: tool_call_completed
+data: {"taskId":"sales-agent","round":1,"name":"list_open_invoices","durationMs":98}
+
+event: tool_call_started
+data: {"taskId":"sales-agent","round":2,"name":"create_followup_task","args":{"accountId":"acc_1042","title":"Discuss payment plan for open $12k","dueDate":"2026-05-29"}}
+
+event: tool_call_completed
+data: {"taskId":"sales-agent","round":2,"name":"create_followup_task","durationMs":201}
+
+event: task_completed
+data: {"taskId":"sales-agent","toolRounds":2,"toolCalls":3,"tokensUsed":2184,"costUsd":0.01842}

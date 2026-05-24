@@ -42,7 +42,7 @@ Building AI-powered applications today also requires:
 | 5 | **Cost tracking** | Tokens and USD **per task and per execution**; APIs and cost dashboard — see [AI Agents](./09-ai-agents.md), [API Design](./10-api-design.md) |
 | 6 | **Human-in-the-loop** | Pause at `human.approval`, wait for a human, then **resume automatically** — see [AI Agents](./09-ai-agents.md) |
 | 7 | **Shared context** | Conversation history and variables across steps (`contextKey`, outputs); RAG via **external** vector stores (not a built-in DB) — see [AI Agents](./09-ai-agents.md) |
-| 8 | **Triggers** | REST API, webhooks, cron, Kafka events — see [Features](./03-features.md), [API Design](./10-api-design.md) |
+| 8 | **Triggers** | REST API, webhooks, cron, Kafka events — see [`examples/17-order-fulfillment-kafka-trigger.yaml`](../examples/17-order-fulfillment-kafka-trigger.yaml), [Features](./03-features.md) |
 | 9 | **Observability** | Real-time logs (SSE), execution history, per-task inputs/outputs, latency, errors, token/cost metrics — see [Features](./03-features.md) |
 | 10 | **Ship faster** | Platform handles orchestration, scaling, retries, and ops so teams focus on **agent logic**, not infrastructure |
 
@@ -95,4 +95,4 @@ We are not a clone — we are AI-first, Java-based, and distributed.
 
 ## See example workflows
 
-Production-style flows (support RAG, on-call triage, marketplace moderation, invoice AP, legal HITL, cron digests, and more) live in [`examples/`](../examples/)—each mapped to [Vision & Goals](./01-vision-and-goals.md) in [GOALS.md](../examples/GOALS.md). Walkthrough: [15 — Examples](./15-examples.md).
+Production-style flows (support RAG, on-call triage, marketplace moderation, invoice AP, legal HITL, cron digests, **SSE streaming**, **tool calling**, **`core.foreach` loops**, **Kafka multi-worker scaling**, and more) live in [`examples/`](../examples/) — see [`examples/DISTRIBUTED.md`](../examples/DISTRIBUTED.md) for the execution model.—each mapped to [Vision & Goals](./01-vision-and-goals.md) in [GOALS.md](../examples/GOALS.md). Walkthrough: [15 — Examples](./15-examples.md).

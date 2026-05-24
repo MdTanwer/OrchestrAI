@@ -1,0 +1,108 @@
+# Real use case: Sales copilot — rep asks in plain English; the LLM invokes CRM/ERP subtasks as tools.
+# Goals: G6 agent logic | G4 extensibility | F3.7 tool calling
+#
+# Execution loop (handled by the engine, not your app code):
+#   1. openai.chat receives userMessage + tool schemas
+#   2. Model returns tool_calls → engine runs matching tool (nested plugin config)
+#   3. Tool output is appended to the conversation → model may call more tools (up to maxToolRounds)
+#   4. Final natural-language answer stored on outputs.sales-agent.response
+#
+# Distinct from a fixed pipeline (02, 09): the model chooses which tools and argument values.
+
+id: sales-rep-copilot
+namespace: production.sales
+
+description: "Answer rep questions by calling CRM lookup, invoice list, and follow-up task tools on demand."
+
+labels:
+  team: sales
+  product: crm-copilot
+  pattern: tool-calling
+
+inputs:
+  - id: repEmail
+    type: STRING
+    required: true
+  - id: userMessage
+    type: STRING
+    required: true
+    description: "e.g. What does Acme owe us and log a follow-up for next week?"
+
+variables:
+  agentModel: gpt-4o
+  maxToolRounds: 5
+
+tasks:
+  - id: sales-agent
+    type: openai.chat
+    model: "{{ vars.agentModel }}"
+    maxToolRounds: "{{ vars.maxToolRounds }}"
+    prompt: |
+      You are a sales operations copilot for reps at our B2B SaaS company.
+      Use tools to fetch facts—never invent account balances or invoice IDs.
+      Rep: {{ inputs.repEmail }}
+      Question: {{ inputs.userMessage }}
+    tools:
+      - name: lookup_account
+        description: "Fetch account profile, ARR, and CSM owner by account ID."
+        parameters:
+          type: object
+          required: [accountId]
+          properties:
+            accountId:
+              type: string
+              description: "CRM account id, e.g. acc_1042"
+        type: http.request
+        method: GET
+        url: "https://crm.example.com/v1/accounts/{{ tool.args.accountId }}"
+
+      - name: list_open_invoices
+        description: "List unpaid invoices for an account."
+        parameters:
+          type: object
+          required: [accountId]
+          properties:
+            accountId:
+              type: string
+        type: http.request
+        method: GET
+        url: "https://erp.example.com/v1/accounts/{{ tool.args.accountId }}/invoices?status=open"
+
+      - name: create_followup_task
+        description: "Create a CRM task for the rep to follow up with the account."
+        parameters:
+          type: object
+          required: [accountId, title, dueDate]
+          properties:
+            accountId:
+              type: string
+            title:
+              type: string
+            dueDate:
+              type: string
+              description: "ISO date YYYY-MM-DD"
+        type: http.request
+        method: POST
+        url: "https://crm.example.com/v1/tasks"
+        body: |
+          {
+            "accountId": "{{ tool.args.accountId }}",
+            "title": "{{ tool.args.title }}",
+            "dueDate": "{{ tool.args.dueDate }}",
+            "ownerEmail": "{{ inputs.repEmail }}"
+          }
+
+  - id: audit-tool-usage
+    type: http.request
+    description: "Persist which tools ran for compliance (outputs include toolCalls summary)."
+    method: POST
+    url: "https://audit.example.com/v1/sales-copilot/runs"
+    body: |
+      {
+        "rep": "{{ inputs.repEmail }}",
+        "answer": "{{ outputs.sales-agent.response }}",
+        "toolCalls": {{ outputs.sales-agent.toolCalls }},
+        "toolRounds": {{ outputs.sales-agent.toolRounds }},
+        "tokensUsed": {{ outputs.sales-agent.tokensUsed }},
+        "costUsd": {{ outputs.sales-agent.costUsd }}
+      }

@@ -34,6 +34,10 @@ A runtime instance of a Flow. When you "run" a Flow, you create an Execution. Ea
 
 A runtime instance of a single Task within an Execution. If a Flow has 5 tasks and you execute it, you get 5 TaskRuns.
 
+### Loop (`core.foreach`)
+
+A control-flow task that runs nested tasks for **each element** in a list (`items`). Inside the loop, `taskrun.value` is the current item and `taskrun.index` is the position. After completion, `outputs.<foreachTaskId>.results` holds per-iteration outputs. See [`examples/15-churn-outreach-foreach.yaml`](../examples/15-churn-outreach-foreach.yaml).
+
 ### Trigger
 
 An event that starts an Execution. Types:
@@ -43,7 +47,7 @@ An event that starts an Execution. Types:
 | Manual | User clicks "Run" |
 | Cron | Scheduled time |
 | Webhook | HTTP request |
-| Event | Kafka message |
+| Event | Kafka message on **your** topic (`triggers[].type: kafka`) — see [`examples/17-order-fulfillment-kafka-trigger.yaml`](../examples/17-order-fulfillment-kafka-trigger.yaml) |
 
 ### Plugin
 
@@ -55,7 +59,7 @@ A reusable, pluggable component that defines a task type. Examples:
 
 ### Worker
 
-A process that executes TaskRuns. Workers pull tasks from Kafka queues and execute them. You can run multiple workers for scalability.
+A process that executes TaskRuns. Workers pull tasks from Kafka queues and execute them. You can run multiple workers for scalability. Workers are stateless—they do not load the full flow graph. See [`examples/DISTRIBUTED.md`](../examples/DISTRIBUTED.md) and [`16-distributed-document-review.yaml`](../examples/16-distributed-document-review.yaml).
 
 ### Namespace
 
@@ -146,9 +150,13 @@ Each AI TaskRun records `tokensUsed` and `costUsd` (estimated from the provider'
 
 The maximum tokens an LLM can process at once.
 
+### Streaming (token SSE)
+
+When a task sets `stream: true`, the worker forwards each completion chunk to the API, which emits `token_delta` events on `GET /executions/{id}/stream`. The UI renders partial text in real time; the full `response` is still stored on the TaskRun for downstream tasks. Distinct from **log streaming** (`/logs/stream`), which is for ops messages only.
+
 ### Tool Calling
 
-An LLM's ability to invoke functions or APIs as part of its response.
+An LLM task (`openai.chat`, etc.) declares **tools**—each tool maps to a plugin subtask (`http.request`, `postgres.query`, …). The model chooses which tools to run and fills `tool.args`; the engine executes subtasks and loops until the model returns a final answer or `maxToolRounds` is hit. See [`examples/14-sales-agent-with-tools.yaml`](../examples/14-sales-agent-with-tools.yaml).
 
 ### Chain
 

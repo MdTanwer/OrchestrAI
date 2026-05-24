@@ -103,6 +103,60 @@ inputs:
     description: <string>
 ```
 
+### Trigger Schema
+
+Flows start via **manual API**, **webhook**, **cron**, or **Kafka**. Each trigger creates a separate `Execution` (`trigger_type`: `MANUAL`, `WEBHOOK`, `CRON`, `EVENT`).
+
+#### Cron (`schedule.cron`)
+
+```yaml
+triggers:
+  - id: monday-morning
+    type: schedule.cron
+    cron: "0 8 * * 1"
+    timezone: "America/New_York"
+```
+
+See [`examples/11-weekly-ops-digest.yaml`](../examples/11-weekly-ops-digest.yaml).
+
+#### Webhook
+
+```yaml
+triggers:
+  - id: helpdesk-webhook
+    type: webhook
+    path: /hooks/support-ticket
+```
+
+See [`examples/04-support-ticket-router.yaml`](../examples/04-support-ticket-router.yaml), [`examples/10-incident-triage.yaml`](../examples/10-incident-triage.yaml).
+
+#### Kafka event (`kafka`) — **starts flow on message**
+
+OrchestrAI runs a **trigger consumer** (not a worker) that subscribes to your business topic. **One Kafka message → one Execution.** Payload fields map to flow `inputs` by name, or via `inputsMapping` (JSONPath).
+
+```yaml
+triggers:
+  - id: on-order-created
+    type: kafka
+    topic: ecommerce.orders.created      # Required: topic to subscribe
+    consumerGroup: orchestrai-fulfillment-v1  # Required: consumer group id
+    description: <string>                  # Optional
+    offsetReset: earliest | latest         # Optional: default latest
+    inputsMapping:                         # Optional: rename nested JSON fields
+      orderId: "$.order_id"
+      customerEmail: "$.customer.email"
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `type` | Yes | Must be `kafka` |
+| `topic` | Yes | External topic (e.g. from storefront, billing, IoT) |
+| `consumerGroup` | Yes | Isolated offset cursor per flow/deployment |
+| `inputsMapping` | No | JSONPath from message `value` → `inputs.*` |
+| `offsetReset` | No | Where to start when no committed offset exists |
+
+**Not the same as** internal topics `executions` / `task-runs` (platform plumbing). Example flow: [`examples/17-order-fulfillment-kafka-trigger.yaml`](../examples/17-order-fulfillment-kafka-trigger.yaml). Sample message: [`kafka-trigger-message.json`](../examples/sample-output/kafka-trigger-message.json).
+
 ### Task Schema (Standard Task Parameters)
 ```yaml
 tasks:
@@ -114,11 +168,36 @@ tasks:
       maxAttempts: 3
       backoff: exponential
       initialDelay: "1s"
+    stream: <bool>         # Optional: AI chat plugins only — emit token_delta SSE events to client (default false)
     if: <expression>       # Optional: Skip task dynamically if condition resolves false
     fallback:              # Optional: Run alternative task if this task fails
       type: <plugin-type>  # Required: plugin type of the fallback task
       # Plugin-specific config and fallback conditions
+    tools:                 # Optional: AI chat only — LLM-invoked subtasks (see below)
+    maxToolRounds: <int>   # Optional: Max LLM ↔ tool iterations (default 10)
 ```
+
+### Tool definitions (`tools` on AI chat tasks)
+
+Each entry in `tools` is a **named function** the model can call plus a **plugin payload** the worker executes.
+
+```yaml
+tools:
+  - name: lookup_account          # Required: function name for the model
+    description: "..."            # Required: when to use this tool
+    parameters:                   # Required: JSON Schema for tool arguments
+      type: object
+      required: [accountId]
+      properties:
+        accountId: { type: string }
+    type: http.request            # Required: plugin type for the subtask
+    method: GET
+    url: "https://crm.example.com/v1/accounts/{{ tool.args.accountId }}"
+```
+
+At runtime the engine resolves `{{ tool.args.<field> }}` from the model's `tool_call` arguments, runs the plugin, appends the result to the agent conversation, and may invoke the model again until `maxToolRounds` is reached.
+
+Outputs on the parent task include `response`, `toolCalls[]`, and `toolRounds`. See [Examples — Tool calling](./15-examples.md#14-sales-rep-copilot--tool-calling).
 
 ---
 
@@ -161,17 +240,44 @@ Branches execution path based on a boolean condition.
 *   **Schema:** Requires `condition` (expression resolving to boolean) and `then` (list of tasks). Optional: `else` (list of tasks).
 
 ### 3. Loop Task (`core.foreach`)
-Iterates tasks over a list.
+Runs the nested `tasks` list **once per element** in `items`. Use for batch operations (personalized emails per account, API call per row, etc.) instead of duplicating YAML.
+
 ```yaml
-- id: process-users
+- id: personalize-outreach
   type: core.foreach
-  items: "{{ outputs.get-users.list }}"
+  items: "{{ outputs.fetch-at-risk-accounts.body.accounts }}"
   tasks:
-    - id: notify-user
+    - id: draft-save-email
+      type: openai.chat
+      prompt: "Account {{ taskrun.value.companyName }} ({{ taskrun.index + 1 }}/{{ taskrun.total }})"
+    - id: log-crm-touch
       type: http.request
-      url: "https://api.com/user/{{ taskrun.value.id }}/notify"
+      url: "https://crm.example.com/v1/accounts/{{ taskrun.value.accountId }}/activities"
 ```
-*   **Schema:** Requires `items` (expression resolving to a JSON array) and `tasks` (list of tasks executing for each item).
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `items` | Yes | Expression → JSON **array** (empty array skips the loop) |
+| `tasks` | Yes | Steps executed per item, in order within each iteration |
+
+**Loop-scoped expressions** (only inside nested tasks):
+
+| Expression | Meaning |
+|------------|---------|
+| `{{ taskrun.value }}` | Current list element (object or scalar) |
+| `{{ taskrun.value.accountId }}` | Field on object items |
+| `{{ taskrun.index }}` | 0-based iteration index |
+| `{{ taskrun.total }}` | `items.length` |
+
+**Parent task outputs** after the loop completes:
+
+| Output field | Description |
+|--------------|-------------|
+| `results` | Array of per-iteration outputs (nested task results) |
+| `count` | Number of iterations run |
+| `totalCostUsd` / `totalTokens` | Rolled-up AI usage across iterations |
+
+Example flow: [`examples/15-churn-outreach-foreach.yaml`](../examples/15-churn-outreach-foreach.yaml). Sample: [`foreach-results.json`](../examples/sample-output/foreach-results.json).
 
 ---
 
@@ -184,7 +290,7 @@ All dynamic evaluation in OrchestrAI is enclosed in `{{ }}` brackets and compute
 *   **Variables:** `{{ vars.myVariable }}`
 *   **Outputs:** `{{ outputs.stepId.response }}`
 *   **Nested Outputs (Parallel):** `{{ outputs.parallelParentId.childStepId.response }}`
-*   **Loop Variable:** `{{ taskrun.value }}` (refers to the current element in a loop iteration)
+*   **Loop (foreach):** `{{ taskrun.value }}`, `{{ taskrun.index }}`, `{{ taskrun.total }}` — see [Loop Task](#3-loop-task-coreforeach)
 *   **Built-in Functions:**
     *   `{{ now() }}` - ISO time string
     *   `{{ uuid() }}` - Random UUID
@@ -214,6 +320,25 @@ condition: "{{ (outputs.draft.costUsd + outputs.refine.costUsd) > vars.maxBudget
 ```
 
 Indirect cost control: set `maxTokens` on the task config. Flow-level `labels` (e.g. `cost-center: marketing`) filter metrics in `GET /metrics/costs`. See [Examples — Cost Tracking](./15-examples.md#8-cost-tracking--tokens-and-usd-per-step-and-per-run).
+
+### AI Task Streaming (`stream: true`)
+
+When `stream: true` on an AI chat task, the worker consumes the provider's streaming completion API and publishes each chunk to the API server's SSE bus. Clients connect with `GET /executions/{id}/stream`; non-streaming tasks in the same flow behave unchanged.
+
+```yaml
+- id: stream-answer
+  type: openai.chat
+  stream: true
+  model: gpt-4o
+  prompt: "{{ inputs.userMessage }}"
+
+- id: save
+  type: http.request
+  url: "https://api.example.com/messages"
+  body: "{{ outputs.stream-answer.response }}"  # full text available after stream ends
+```
+
+See [Examples — Streaming copilot](./15-examples.md#13-streaming-product-copilot--sse-token-stream).
 
 ### Secure Secret Resolution Pattern
 To prevent credential leaks in Kafka pipelines, **never use secrets as JEXL expressions** (e.g. `apiKey: "{{ secret('X') }}"` is deprecated). Instead, plugins automatically read API keys directly from the worker environment context, or map custom keys securely:

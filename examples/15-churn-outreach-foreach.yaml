@@ -1,0 +1,89 @@
+# Real use case: Customer success — fetch at-risk accounts, personalize save-email per account in a loop.
+# Goals: F2.4 loops | G6 batch agent work without copy-pasting tasks in YAML
+#
+# Loop variables inside core.foreach tasks:
+#   {{ taskrun.value }}     — current item (object from the list)
+#   {{ taskrun.index }}     — 0-based iteration index
+#   {{ taskrun.total }}     — list length
+#
+# Aggregated output after the loop:
+#   {{ outputs.personalize-outreach.results }} — array of per-iteration task outputs
+
+id: churn-save-outreach
+namespace: production.customer-success
+
+description: "Pull accounts flagged for churn, draft a personalized outreach email for each, then summarize the batch."
+
+labels:
+  team: customer-success
+  playbook: churn-save
+  pattern: foreach
+
+inputs:
+  - id: cohortDate
+    type: STRING
+    required: true
+    description: "ISO date for the at-risk cohort, e.g. 2026-05-22"
+
+variables:
+  emailModel: gpt-4o-mini
+  maxAccountsPerRun: 50
+
+tasks:
+  - id: fetch-at-risk-accounts
+    type: http.request
+    method: GET
+    url: "https://analytics.example.com/v1/cohorts/at-risk?date={{ inputs.cohortDate }}&limit={{ vars.maxAccountsPerRun }}"
+    description: "Returns JSON { accounts: [{ accountId, companyName, ownerEmail, healthScore, mrrUsd }] }"
+
+  - id: personalize-outreach
+    type: core.foreach
+    items: "{{ outputs.fetch-at-risk-accounts.body.accounts }}"
+    description: "One LLM + CRM note per account — runs sequentially by default; workers may parallelize per platform config."
+    tasks:
+      - id: draft-save-email
+        type: openai.chat
+        model: "{{ vars.emailModel }}"
+        prompt: |
+          Write a short, human outreach email (subject + body) for a customer success manager.
+          Company: {{ taskrun.value.companyName }}
+          Account id: {{ taskrun.value.accountId }}
+          Health score: {{ taskrun.value.healthScore }} (lower is worse)
+          MRR USD: {{ taskrun.value.mrrUsd }}
+          Tone: empathetic, offer a 15-min call, no discount promises.
+          This is outreach {{ taskrun.index + 1 }} of {{ taskrun.total }} in today's batch.
+
+      - id: log-crm-touch
+        type: http.request
+        method: POST
+        url: "https://crm.example.com/v1/accounts/{{ taskrun.value.accountId }}/activities"
+        body: |
+          {
+            "type": "churn_save_draft",
+            "ownerEmail": "{{ taskrun.value.ownerEmail }}",
+            "draftEmail": "{{ outputs.draft-save-email.response }}",
+            "tokensUsed": {{ outputs.draft-save-email.tokensUsed }},
+            "costUsd": {{ outputs.draft-save-email.costUsd }}
+          }
+
+  - id: batch-summary
+    type: openai.chat
+    model: gpt-4o-mini
+    prompt: |
+      Summarize this churn-save batch for the CS lead: how many accounts, total MRR at risk,
+      and one paragraph of themes. Do not list every email in full.
+
+      Accounts processed: {{ outputs.personalize-outreach.count }}
+      Per-account results (subjects + first line only):
+      {{ outputs.personalize-outreach.results }}
+
+  - id: notify-cs-lead
+    type: http.request
+    method: POST
+    url: "https://notifications.example.com/v1/slack/cs-leads"
+    body: |
+      {
+        "channel": "customer-success",
+        "text": "{{ outputs.batch-summary.response }}",
+        "batchCostUsd": {{ outputs.personalize-outreach.totalCostUsd }}
+      }

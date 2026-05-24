@@ -1,0 +1,110 @@
+# Real use case: E-commerce — each `orders.created` Kafka message starts one fulfillment execution.
+# Goals: F5.4 Kafka triggers | G6 event-driven agents without a custom consumer service
+#
+# Platform behavior:
+#   - OrchestrAI registers a consumer on topic `ecommerce.orders.created` (consumer group below)
+#   - Each message → new Execution (trigger_type: EVENT) with payload mapped to flow inputs
+#   - Same worker pool as API/cron/webhook triggers → tasks on `task-runs`
+#
+# Producer (your storefront), example payload: examples/sample-output/kafka-trigger-message.json
+# Distinct from in-run Kafka (task-runs): this trigger STARTS the flow.
+
+id: order-fulfillment-agent
+namespace: production.fulfillment
+
+description: "On order created: validate, draft packing note with LLM, notify warehouse WMS."
+
+labels:
+  team: fulfillment
+  trigger: kafka
+  topic: ecommerce.orders.created
+
+triggers:
+  - id: on-order-created
+    type: kafka
+    topic: ecommerce.orders.created
+    consumerGroup: orchestrai-fulfillment-v1
+    description: "Consumes checkout events from the storefront service."
+    # Optional: start at end of topic on deploy (default: latest)
+    # offsetReset: latest
+    # Optional: JSONPath map when Kafka field names differ from input ids
+    # inputsMapping:
+    #   orderId: "$.order_id"
+    #   customerEmail: "$.customer.email"
+    #   lineItems: "$.items"
+
+inputs:
+  - id: orderId
+    type: STRING
+    required: true
+    description: "From Kafka value.orderId (or mapped via inputsMapping)."
+  - id: customerEmail
+    type: STRING
+    required: true
+  - id: lineItems
+    type: JSON
+    required: true
+    description: "Array of { sku, qty, name }."
+  - id: shipToCountry
+    type: STRING
+    defaults: "US"
+
+variables:
+  packingNoteModel: gpt-4o-mini
+
+tasks:
+  - id: validate-order
+    type: http.request
+    method: POST
+    url: "https://oms.example.com/v1/orders/{{ inputs.orderId }}/validate"
+    body: |
+      {
+        "lineItems": {{ inputs.lineItems }},
+        "shipToCountry": "{{ inputs.shipToCountry }}"
+      }
+
+  - id: draft-packing-note
+    type: openai.chat
+    if: "{{ outputs.validate-order.body.valid == true }}"
+    model: "{{ vars.packingNoteModel }}"
+    prompt: |
+      Write a 2-sentence warehouse packing note for order {{ inputs.orderId }}.
+      Customer country: {{ inputs.shipToCountry }}.
+      Items: {{ inputs.lineItems }}.
+      Mention fragile handling only if product names suggest it.
+
+  - id: submit-to-wms
+    type: http.request
+    if: "{{ outputs.validate-order.body.valid == true }}"
+    method: POST
+    url: "https://wms.example.com/v1/shipments"
+    body: |
+      {
+        "orderId": "{{ inputs.orderId }}",
+        "customerEmail": "{{ inputs.customerEmail }}",
+        "packingNote": "{{ outputs.draft-packing-note.response }}",
+        "trigger": "kafka:ecommerce.orders.created"
+      }
+
+  - id: notify-invalid-order
+    type: http.request
+    if: "{{ outputs.validate-order.body.valid != true }}"
+    method: POST
+    url: "https://notifications.example.com/v1/slack/fulfillment-alerts"
+    body: |
+      {
+        "text": "Order {{ inputs.orderId }} failed validation after Kafka trigger.",
+        "lineItems": {{ inputs.lineItems }}
+      }
+
+onFailure:
+  - id: dlq-alert
+    type: http.request
+    method: POST
+    url: "https://ops.example.com/v1/kafka/dlq"
+    body: |
+      {
+        "flow": "order-fulfillment-agent",
+        "orderId": "{{ inputs.orderId }}",
+        "consumerGroup": "orchestrai-fulfillment-v1"
+      }

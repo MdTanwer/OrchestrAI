@@ -1,0 +1,41 @@
+# Sample SSE stream: GET /v1/executions/{executionId}/stream
+# Accept: text/event-stream
+#
+# Token deltas are emitted while task "stream-answer" (stream: true) is running.
+# Log/state events share the same connection so the UI can show a typing indicator + final metrics.
+
+event: execution_started
+data: {"executionId":"550e8400-e29b-41d4-a716-446655440000","flowId":"streaming-product-copilot","namespace":"production.product"}
+
+event: task_started
+data: {"taskId":"stream-answer","taskType":"openai.chat","stream":true,"startedAt":"2026-05-22T14:02:01Z"}
+
+event: token_delta
+data: {"taskId":"stream-answer","index":0,"delta":"Our"}
+
+event: token_delta
+data: {"taskId":"stream-answer","index":1,"delta":" Pro"}
+
+event: token_delta
+data: {"taskId":"stream-answer","index":2,"delta":" plan"}
+
+event: token_delta
+data: {"taskId":"stream-answer","index":3,"delta":" includes"}
+
+event: log
+data: {"level":"INFO","taskId":"stream-answer","message":"Streaming completion from openai.chat"}
+
+event: token_done
+data: {"taskId":"stream-answer","response":"Our Pro plan includes SSO, audit logs, and 99.9% SLA. Upgrade from Settings → Billing.","model":"gpt-4o","tokensUsed":412,"promptTokens":198,"completionTokens":214,"costUsd":0.00384}
+
+event: task_completed
+data: {"taskId":"stream-answer","durationMs":2840,"streamed":true}
+
+event: task_started
+data: {"taskId":"persist-transcript","taskType":"http.request","stream":false,"startedAt":"2026-05-22T14:02:04Z"}
+
+event: task_completed
+data: {"taskId":"persist-transcript","durationMs":120}
+
+event: execution_completed
+data: {"state":"SUCCESS","totalCostUsd":0.00384,"totalTokens":412}

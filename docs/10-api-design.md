@@ -74,6 +74,60 @@ Delete a flow (cascade deletes all historical versions and associated executions
 
 ---
 
+### Triggers (Kafka, webhook, cron)
+
+When a flow with `triggers:` is **created or updated**, the platform registers listeners:
+
+| Trigger type | Registration behavior |
+|--------------|----------------------|
+| `kafka` | Join `consumerGroup` on `topic`; each message → `POST` internal execute |
+| `webhook` | Expose `path` on API server |
+| `schedule.cron` | Scheduler publishes to `executions` at fire time |
+
+#### Kafka trigger — message → execution
+
+**Flow YAML** ([`examples/17-order-fulfillment-kafka-trigger.yaml`](../examples/17-order-fulfillment-kafka-trigger.yaml)):
+
+```yaml
+triggers:
+  - id: on-order-created
+    type: kafka
+    topic: ecommerce.orders.created
+    consumerGroup: orchestrai-fulfillment-v1
+```
+
+**Inbound message** (from your producer): see [`kafka-trigger-message.json`](../examples/sample-output/kafka-trigger-message.json).
+
+**Platform steps:**
+
+1. Consumer reads record from `ecommerce.orders.created`
+2. Maps `value` JSON to flow `inputs` (by key name or `inputsMapping`)
+3. Publishes to internal `executions` topic → Executor runs tasks → workers consume `task-runs`
+4. Commits offset only after execution is accepted (at-least-once; idempotent inputs recommended)
+
+**Manual replay / test** (without producing to Kafka):
+
+```http
+POST /v1/flows/production.fulfillment/order-fulfillment-agent/execute
+Content-Type: application/json
+
+{
+  "inputs": {
+    "orderId": "ord_test",
+    "customerEmail": "test@example.com",
+    "lineItems": [{ "sku": "SKU-1", "qty": 1, "name": "Test" }],
+    "shipToCountry": "US"
+  },
+  "labels": { "trigger": "manual-test" }
+}
+```
+
+#### `GET /flows/{namespace}/{id}/triggers`
+
+List registered triggers and consumer lag (ops dashboard).
+
+---
+
 ### Executions
 
 #### `POST /flows/{namespace}/{id}/execute`
@@ -118,7 +172,7 @@ Get logs (paginated).
 
 #### `GET /executions/{id}/logs/stream` (SSE)
 
-Stream logs in real time.
+Stream structured logs and execution state (no LLM token deltas). Use for ops/debug dashboards.
 
 ```
 event: log
@@ -127,6 +181,37 @@ data: {"level":"INFO","message":"Task started"}
 event: state
 data: {"state":"RUNNING"}
 ```
+
+#### `GET /executions/{id}/stream` (SSE) — token streaming
+
+Stream **LLM token deltas** to the client for tasks defined with `stream: true` in the flow YAML. Multiplexes lifecycle events so a single `EventSource` can drive a chat UI.
+
+```
+event: token_delta
+data: {"taskId":"stream-answer","index":0,"delta":"Our"}
+
+event: token_done
+data: {"taskId":"stream-answer","response":"...full text...","model":"gpt-4o","tokensUsed":412,"costUsd":0.00384}
+
+event: tool_call_started
+data: {"taskId":"sales-agent","round":1,"name":"lookup_account","args":{"accountId":"acc_1042"}}
+
+event: tool_call_completed
+data: {"taskId":"sales-agent","round":1,"name":"lookup_account","taskRunId":"uuid","durationMs":142}
+
+event: execution_completed
+data: {"state":"SUCCESS","totalCostUsd":0.00384}
+```
+
+Tool events are emitted for tasks with a `tools` list. Sample sequence: [`examples/sample-output/tool-calling-sse.txt`](../examples/sample-output/tool-calling-sse.txt).
+
+**Typical client flow:**
+
+1. `POST /flows/{namespace}/{id}/execute` → `{ "executionId": "uuid" }`
+2. Immediately open `GET /executions/{uuid}/stream` with `Accept: text/event-stream`
+3. Append `token_delta.delta` until `token_done` or `task_completed` for that `taskId`
+
+Sample payload sequence: [`examples/sample-output/token-stream-sse.txt`](../examples/sample-output/token-stream-sse.txt). Browser snippet: [`streaming-client.md`](../examples/sample-output/streaming-client.md).
 
 #### `POST /executions/{id}/cancel`
 
@@ -292,7 +377,7 @@ All errors follow this format:
 
 ## WebSocket / SSE
 
-### Real-time Execution Updates
+### Real-time execution updates (logs)
 
 Connect to SSE endpoint:
 
@@ -316,6 +401,38 @@ data: {"taskId":"step1","durationMs":1234}
 event: execution_completed
 data: {"state":"SUCCESS","totalCostUsd":0.045}
 ```
+
+### Token streaming (SSE) {#token-streaming-sse}
+
+For chat UIs, use the dedicated stream endpoint (includes token deltas **and** lifecycle events):
+
+```
+GET /executions/{id}/stream
+Accept: text/event-stream
+```
+
+**Additional events (when flow task has `stream: true`):**
+
+```
+event: token_delta
+data: {"taskId":"stream-answer","index":0,"delta":"Hello"}
+
+event: token_done
+data: {"taskId":"stream-answer","response":"Hello world","tokensUsed":12,"costUsd":0.0001,"model":"gpt-4o"}
+
+event: tool_call_started
+data: {"taskId":"sales-agent","round":1,"name":"lookup_account","args":{"accountId":"acc_1042"}}
+
+event: tool_call_completed
+data: {"taskId":"sales-agent","name":"lookup_account","durationMs":142}
+```
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/executions/{id}/logs/stream` | Ops logs, state changes |
+| `/executions/{id}/stream` | **Product UI** — token-by-token LLM output |
+
+Example flow: [`examples/13-streaming-copilot.yaml`](../examples/13-streaming-copilot.yaml).
 
 ---
 

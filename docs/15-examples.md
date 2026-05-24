@@ -12,10 +12,10 @@ Runnable YAML: [`examples/`](../examples/). Goal mapping: [`examples/GOALS.md`](
 |------|-------------------------|
 | G1 Simplicity | `01` — copilot in ~15 lines of tasks |
 | G2 Reliability | `05`, `10` — retry, fallback, `onFailure` |
-| G3 Observability | `08`, `09`, `11` — cost labels + metrics on TaskRuns |
-| G4 Extensibility | `09` — Pinecone via `http.request`; `03` — custom policy plugin |
-| G5 Performance | `03`, `10` — `core.parallel` for independent work |
-| G6 Agent logic, not plumbing | All — no hand-rolled retry loops; platform owns execution |
+| G3 Observability | `08`, `09`, `11`, `13` — cost metrics + live SSE token stream |
+| G4 Extensibility | `09`, `14` — HTTP/DB plugins; `14` exposes them as LLM tools |
+| G5 Performance | `03`, `10`, `16` — `core.parallel` + worker pool; `15` — `core.foreach` |
+| G6 Agent logic, not plumbing | `14` — model picks tools; platform runs the loop |
 
 **Out of scope (no examples for these):** custom training, built-in vector DB, drag-and-drop UI. RAG appears only in `09` as HTTP to **your** index.
 
@@ -285,6 +285,221 @@ flowchart LR
 
 ---
 
+### 13. Streaming Product Copilot — SSE token stream
+
+**File:** [`examples/13-streaming-copilot.yaml`](../examples/13-streaming-copilot.yaml)
+
+**Scenario:** In-app chat widget: user sees the answer **token-by-token** while the flow runs; when streaming ends, a second task persists the full transcript + usage to your API.
+
+```mermaid
+sequenceDiagram
+  participant UI as Chat UI
+  participant API as OrchestrAI API
+  participant W as Worker
+  UI->>API: POST execute
+  API-->>UI: executionId
+  UI->>API: GET /executions/id/stream SSE
+  W->>API: token_delta events
+  API-->>UI: append delta to message
+  W->>API: token_done + task_completed
+  W->>API: persist-transcript HTTP
+  API-->>UI: execution_completed
+```
+
+**YAML:**
+
+```yaml
+- id: stream-answer
+  type: openai.chat
+  stream: true
+  prompt: "{{ inputs.userMessage }}"
+```
+
+**Client:** `GET /v1/executions/{executionId}/stream` — handle `token_delta` and `token_done`. Not the same as `/logs/stream` (ops logs only).
+
+| SSE event | Purpose |
+|-----------|---------|
+| `token_delta` | Append `delta` to the chat bubble |
+| `token_done` | Final text + `tokensUsed` + `costUsd` |
+| `execution_completed` | Close `EventSource` |
+
+**Samples:** [`token-stream-sse.txt`](../examples/sample-output/token-stream-sse.txt), [`streaming-client.md`](../examples/sample-output/streaming-client.md).
+
+**Goals:** G3 observability, F3.9 streaming, G6 (no custom WebSocket server in app code).
+
+**Related:** [AI Agents — Streaming](./09-ai-agents.md#5-streaming), [API — Token streaming](./10-api-design.md#token-streaming-sse).
+
+---
+
+### 14. Sales Rep Copilot — tool calling
+
+**File:** [`examples/14-sales-agent-with-tools.yaml`](../examples/14-sales-agent-with-tools.yaml)
+
+**Scenario:** Rep asks: *"What does Acme owe us and schedule a follow-up?"* One `openai.chat` task exposes CRM/ERP tools; the **model** picks `lookup_account`, `list_open_invoices`, and `create_followup_task` with generated arguments—not a fixed task order.
+
+```mermaid
+flowchart TD
+  U[userMessage] --> A[sales-agent openai.chat]
+  A -->|tool_call| T1[lookup_account HTTP]
+  A -->|tool_call| T2[list_open_invoices HTTP]
+  T1 --> A
+  T2 --> A
+  A -->|tool_call| T3[create_followup_task HTTP]
+  T3 --> A
+  A --> R[final response]
+  R --> AUD[audit-tool-usage]
+```
+
+| Concept | Fixed pipeline (`02`, `09`) | Tool calling (`14`) |
+|---------|----------------------------|---------------------|
+| Task order | Defined in YAML | Chosen by the model |
+| Arguments | `inputs` / `outputs` | `tool.args` from model |
+| Integrations | Always run | Run only if needed |
+
+**Key YAML:**
+
+```yaml
+tools:
+  - name: lookup_account
+    parameters: { type: object, required: [accountId], properties: { ... } }
+    type: http.request
+    url: "https://crm.example.com/v1/accounts/{{ tool.args.accountId }}"
+```
+
+**Output:** `outputs.sales-agent.toolCalls` for audit dashboards. Sample: [`tool-calling-roundtrip.json`](../examples/sample-output/tool-calling-roundtrip.json).
+
+**Goals:** F3.7, G4 (HTTP/DB plugins as tools), G6.
+
+**Related:** [AI Agents — Tool calling](./09-ai-agents.md#tool-calling--llm-invoked-subtasks), [YAML Schema — tools](./04-yaml-schema.md#tool-definitions-tools-on-ai-chat-tasks).
+
+---
+
+### 15. Churn Save Outreach — `core.foreach`
+
+**File:** [`examples/15-churn-outreach-foreach.yaml`](../examples/15-churn-outreach-foreach.yaml)
+
+**Scenario:** Customer success pulls today's at-risk accounts from analytics, then **loops** each account: draft a personalized save email with GPT and log a CRM activity—without writing 50 copies of the same task in YAML.
+
+```mermaid
+flowchart TD
+  D[inputs.cohortDate] --> F[fetch-at-risk-accounts HTTP]
+  F --> LOOP[core.foreach personalize-outreach]
+  LOOP --> E1[draft-save-email per account]
+  E1 --> C1[log-crm-touch per account]
+  LOOP --> S[batch-summary LLM]
+  S --> N[notify-cs-lead Slack]
+```
+
+**Inside the loop:**
+
+```yaml
+- id: personalize-outreach
+  type: core.foreach
+  items: "{{ outputs.fetch-at-risk-accounts.body.accounts }}"
+  tasks:
+    - id: draft-save-email
+      type: openai.chat
+      prompt: "Company {{ taskrun.value.companyName }} — {{ taskrun.index + 1 }}/{{ taskrun.total }}"
+```
+
+| Expression | Use |
+|------------|-----|
+| `taskrun.value` | Current account object from the list |
+| `taskrun.index` / `taskrun.total` | Progress in prompts or logs |
+| `outputs.personalize-outreach.results` | All iterations (after loop) |
+| `outputs.personalize-outreach.count` | Batch size for summary step |
+
+**vs `core.parallel`:** Parallel runs branches **once** at the same time; foreach runs the **same** nested tasks for **each list item** (serial or worker-scaled per config).
+
+**Goals:** F2.4 loops, G6 (batch agent + HTTP without app orchestration code).
+
+**Sample:** [`foreach-results.json`](../examples/sample-output/foreach-results.json).
+
+**Related:** [YAML Schema — foreach](./04-yaml-schema.md#3-loop-task-coreforeach), [Execution Engine](./07-execution-engine.md#coreforeach-batch-iterations).
+
+---
+
+### 16. Distributed Contract Review — Kafka multi-worker
+
+**File:** [`examples/16-distributed-document-review.yaml`](../examples/16-distributed-document-review.yaml)
+
+**Scenario:** Legal team scores **four contracts in parallel**—each review is a separate `task-runs` Kafka message; any idle worker in the pool can pick it up. After all four `task-results` arrive, the Executor runs `compliance-summary` on a single path (not parallelized).
+
+```mermaid
+flowchart TD
+  B[reviewBatchId + contracts JSON] --> R[register-batch HTTP]
+  R --> P[core.parallel review-in-parallel]
+  P --> W1[review-contract-1 → Worker A]
+  P --> W2[review-contract-2 → Worker B]
+  P --> W3[review-contract-3 → Worker C]
+  P --> W4[review-contract-4 → Worker D]
+  W1 --> S[compliance-summary LLM]
+  W2 --> S
+  W3 --> S
+  W4 --> S
+  S --> PUB[publish-batch-result]
+```
+
+**You do not configure Kafka in the flow** — topics and consumer groups are platform infrastructure. You **do** choose patterns that fan out work:
+
+| Pattern | Worker messages per execution |
+|---------|------------------------------|
+| `core.parallel` (4 children) | 4 simultaneous `task-runs` |
+| `core.foreach` (N items) | N iteration task-runs |
+| Sequential chain | 1 at a time per path |
+
+**Deep dive:** [`examples/DISTRIBUTED.md`](../examples/DISTRIBUTED.md) — topic table, replica scaling, sample [`kafka-task-run-message.json`](../examples/sample-output/kafka-task-run-message.json).
+
+**Goals:** F2.8 distributed execution, G5 performance, Goal 5 (1000+ concurrent workflows at platform level).
+
+**Related:** [Architecture](./05-architecture.md), [Execution Engine — parallel](./07-execution-engine.md#parallel-execution-stateless-wait).
+
+---
+
+### 17. Order Fulfillment — Kafka event trigger
+
+**File:** [`examples/17-order-fulfillment-kafka-trigger.yaml`](../examples/17-order-fulfillment-kafka-trigger.yaml)
+
+**Scenario:** Storefront publishes `ecommerce.orders.created` → OrchestrAI consumes → one execution per order: OMS validate → LLM packing note → WMS shipment create (or Slack alert if invalid).
+
+```mermaid
+flowchart LR
+  K[Storefront Kafka producer] --> T[trigger consumer]
+  T --> E[executions topic]
+  E --> X[Executor]
+  X --> W[Workers task-runs]
+  W --> V[validate-order]
+  V --> P[draft-packing-note]
+  P --> S[submit-to-wms]
+```
+
+**Trigger YAML:**
+
+```yaml
+triggers:
+  - id: on-order-created
+    type: kafka
+    topic: ecommerce.orders.created
+    consumerGroup: orchestrai-fulfillment-v1
+```
+
+| Trigger type | Starts execution when | Example |
+|--------------|----------------------|---------|
+| `kafka` | Message on **your** topic | `17` |
+| `webhook` | HTTP POST to OrchestrAI | `04`, `10` |
+| `schedule.cron` | Cron fires | `11` |
+| Manual | `POST .../execute` | Any flow |
+
+**Payload → inputs:** Kafka `value` fields match `inputs.orderId`, `inputs.lineItems`, etc. Sample: [`kafka-trigger-message.json`](../examples/sample-output/kafka-trigger-message.json).
+
+**vs internal Kafka:** `task-runs` / `task-results` are platform queues inside a run. Trigger Kafka is **ingress** from your product.
+
+**Goals:** F5.4, G6 (no bespoke consumer microservice), value prop #8 triggers.
+
+**Related:** [YAML Schema — Kafka trigger](./04-yaml-schema.md#kafka-event-kafka--starts-flow-on-message), [API — Triggers](./10-api-design.md#triggers-kafka-webhook-cron), [DISTRIBUTED.md](../examples/DISTRIBUTED.md#kafka-event-trigger-starts-a-new-execution).
+
+---
+
 ## Map examples to MVP features
 
 | Example | Scenario | MVP / priority | Goals |
@@ -301,8 +516,13 @@ flowchart LR
 | 10 Incident triage | On-call | P1 webhook | G2, G5 |
 | 11 Weekly digest | Platform cron | P1 cron | G3 |
 | 12 Contract review | Legal CLM | P2 HITL | HITL, agents |
+| 13 Streaming copilot | In-app chat SSE | P1 streaming | G3, F3.9 |
+| 14 Sales agent tools | CRM/ERP copilot | P1 tool calling | F3.7, G4, G6 |
+| 15 Churn foreach | Batch CS outreach | P0 control flow | F2.4, G6 |
+| 16 Distributed review | Parallel + Kafka workers | P0 Kafka weeks 5–6 | F2.8, G5 |
+| 17 Order Kafka trigger | Event-driven fulfillment | P1 Kafka trigger | F5.4, G6 |
 
-See [GOALS.md](../examples/GOALS.md) for audience mapping (AI engineer vs backend vs DevOps).
+See [GOALS.md](../examples/GOALS.md) and [DISTRIBUTED.md](../examples/DISTRIBUTED.md) for audience mapping and ops scaling.
 
 ---
 
