@@ -28,6 +28,10 @@
             <groupId>io.orchestrai</groupId>
             <artifactId>orchestrai-core</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>orchestrai-messaging</artifactId>
+        </dependency>
 
         <!-- All built-in plugins on the worker classpath -->
         <dependency>

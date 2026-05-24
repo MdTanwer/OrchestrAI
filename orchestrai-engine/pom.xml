@@ -16,13 +16,17 @@
     <name>OrchestrAI :: Engine</name>
     <description>
         Stateless execution engine library: state machine, JEXL expressions, retry, Kafka message handlers.
-        No REST endpoints — consumed by orchestrai-api-server (and Kafka wiring in deployables).
+        No REST endpoints — consumed by orchestrai-executor (and orchestrai-api-server for validation).
     </description>
 
     <dependencies>
         <dependency>
             <groupId>io.orchestrai</groupId>
             <artifactId>orchestrai-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>orchestrai-messaging</artifactId>
         </dependency>
         <dependency>
             <groupId>io.orchestrai</groupId>

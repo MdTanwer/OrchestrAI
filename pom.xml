@@ -15,6 +15,7 @@
     <modules>
         <!-- Shared libraries (build order) -->
         <module>orchestrai-core</module>
+        <module>orchestrai-messaging</module>
         <module>orchestrai-yaml-parser</module>
         <module>orchestrai-plugin-sdk</module>
         <module>orchestrai-jdbc</module>
@@ -22,6 +23,7 @@
         <module>orchestrai-plugins</module>
         <!-- Deployable Quarkus services -->
         <module>orchestrai-worker</module>
+        <module>orchestrai-executor</module>
         <module>orchestrai-api-server</module>
         <module>orchestrai-scheduler</module>
         <module>orchestrai-cli</module>
@@ -75,6 +77,11 @@
             <dependency>
                 <groupId>io.orchestrai</groupId>
                 <artifactId>orchestrai-plugin-sdk</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.orchestrai</groupId>
+                <artifactId>orchestrai-messaging</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
