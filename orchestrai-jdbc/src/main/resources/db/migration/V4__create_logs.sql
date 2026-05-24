@@ -1,0 +1,3 @@
+-- TODO: V4__create_logs.sql
+-- logs table
+-- Copy schema from docs/06-data-models.md

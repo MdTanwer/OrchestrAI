@@ -1,0 +1,3 @@
+-- TODO: V6__create_triggers.sql
+-- triggers table
+-- Copy schema from docs/06-data-models.md

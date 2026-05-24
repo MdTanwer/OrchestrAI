@@ -1,0 +1,3 @@
+-- TODO: V1__create_flows.sql
+-- flows table
+-- Copy schema from docs/06-data-models.md

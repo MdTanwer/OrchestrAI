@@ -1,0 +1,3 @@
+-- TODO: V2__create_executions.sql
+-- executions table
+-- Copy schema from docs/06-data-models.md

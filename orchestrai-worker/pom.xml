@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.orchestrai</groupId>
+        <artifactId>orchestrai</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>orchestrai-worker</artifactId>
+    <packaging>jar</packaging>
+
+    <name>OrchestrAI :: Worker</name>
+    <description>
+        Deployable Quarkus service: consumes task-runs from Kafka, executes plugins, publishes task-results and task-logs.
+        Stateless — no flow graph in memory.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>orchestrai-plugin-sdk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>orchestrai-core</artifactId>
+        </dependency>
+
+        <!-- All built-in plugins on the worker classpath -->
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>plugin-openai</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>plugin-anthropic</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>plugin-google</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>plugin-http</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>plugin-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>plugin-human</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>plugin-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>plugin-postgres</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>plugin-shell</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>plugin-ollama</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-smallrye-reactive-messaging-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-arc</artifactId>
+        </dependency>
+        <!-- Java-only worker; quarkus-kotlin not required -->
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>${quarkus.platform.group-id}</groupId>
+                <artifactId>quarkus-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>build</goal>
+                            <goal>generate-code</goal>
+                            <goal>generate-code-tests</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.google.cloud.tools</groupId>
+                <artifactId>jib-maven-plugin</artifactId>
+                <configuration>
+                    <to>
+                        <image>orchestrai/worker</image>
+                        <tags>
+                            <tag>${project.version}</tag>
+                        </tags>
+                    </to>
+                    <container>
+                        <mainClass>io.quarkus.runner.QuarkusEntryPoint</mainClass>
+                    </container>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,3 @@
+# TODO: docker-compose for local dev
+# See docs/11-deployment.md
+# Services: postgres, kafka, api, executor, worker, scheduler, ui

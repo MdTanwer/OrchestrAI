@@ -1,0 +1,2 @@
+# TODO: GitHub Actions CI
+# Jobs: mvn verify, pnpm build

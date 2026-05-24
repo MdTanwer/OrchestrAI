@@ -1,0 +1,3 @@
+-- TODO: V5__create_secrets.sql
+-- secrets table
+-- Copy schema from docs/06-data-models.md
