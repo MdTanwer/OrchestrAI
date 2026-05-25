@@ -91,6 +91,12 @@ mvn test -pl orchestrai-core
 # YAML parser only
 mvn test -pl orchestrai-yaml-parser
 
+# JDBC + Flyway (requires Postgres on localhost:5433)
+mvn test -pl orchestrai-jdbc -am
+
+# YAML parser (uses ../examples/*.yaml)
+mvn test -pl orchestrai-yaml-parser -am
+
 # Compile a single module
 mvn compile -pl orchestrai-api-server -am
 ```

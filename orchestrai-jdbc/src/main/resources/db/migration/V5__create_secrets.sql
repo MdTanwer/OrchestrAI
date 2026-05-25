@@ -1,3 +1,8 @@
--- TODO: V5__create_secrets.sql
--- secrets table
--- Copy schema from docs/06-data-models.md
+CREATE TABLE secrets (
+    id              UUID PRIMARY KEY,
+    namespace       VARCHAR(100) NOT NULL,
+    key             VARCHAR(100) NOT NULL,
+    encrypted_value TEXT NOT NULL,
+    created_at      TIMESTAMP NOT NULL,
+    UNIQUE (namespace, key)
+);

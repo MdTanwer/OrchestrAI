@@ -1,11 +1,16 @@
-/**
- * TODO: Implement SecretRepository
- * Module: orchestrai-jdbc
- * Encrypted secret storage per namespace.
- * @see docs/05-architecture.md
- */
 package io.orchestrai.jdbc.repository;
 
-public class SecretRepository {
-    // TODO: add implementation
+import java.util.Optional;
+import java.util.UUID;
+
+import io.orchestrai.jdbc.entity.SecretEntity;
+import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
+import jakarta.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped
+public class SecretRepository implements PanacheRepositoryBase<SecretEntity, UUID> {
+
+    public Optional<SecretEntity> findByNamespaceAndKey(String namespace, String key) {
+        return find("namespace = ?1 and secretKey = ?2", namespace, key).firstResultOptional();
+    }
 }
