@@ -42,9 +42,12 @@ Full documentation lives in the [`docs/`](./docs/) directory:
 | 13 | [Roadmap](./docs/13-roadmap.md) | Development plan |
 | 14 | [Native Image](./docs/14-native-image.md) | GraalVM native builds |
 | 15 | [Examples](./docs/15-examples.md) | What we build — sample workflows |
+| 16 | [Developer Setup](./docs/16-developer-setup.md) | JDK 17, Maven, pnpm, local commands |
 | — | [`examples/`](./examples/) | Copy-pasteable YAML flow files |
 
 See also [docs/README.md](./docs/README.md) for the documentation index and quick start.
+
+**Build locally:** [Developer Setup](./docs/16-developer-setup.md) — use **JDK 17**, then `mvn test -pl orchestrai-core`.
 
 **New developers:** start with [docs/15-examples.md](./docs/15-examples.md) and [examples/GOALS.md](./examples/GOALS.md)—production scenarios (support RAG, on-call, marketplace, legal) aligned to project goals.
 

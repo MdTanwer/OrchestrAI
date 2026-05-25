@@ -44,6 +44,7 @@ See [Overview — Value Proposition](./00-overview.md#value-proposition) for the
 | 13 | [Roadmap](./13-roadmap.md) | Development plan |
 | 14 | [Native Image](./14-native-image.md) | GraalVM native builds |
 | 15 | [Examples](./15-examples.md) | What we build — sample workflows |
+| 16 | [Developer Setup](./16-developer-setup.md) | JDK 17, Maven, pnpm, local commands |
 | — | [`examples/`](../examples/) | Production-style YAML flows |
 | — | [`examples/GOALS.md`](../examples/GOALS.md) | Examples ↔ vision & goals |
 | — | [`examples/DISTRIBUTED.md`](../examples/DISTRIBUTED.md) | Kafka & multi-worker scaling |
@@ -54,6 +55,8 @@ See [Overview — Value Proposition](./00-overview.md#value-proposition) for the
 ## New here?
 
 Read [Overview](./00-overview.md), then **[Examples](./15-examples.md)** + **[GOALS.md](../examples/GOALS.md)** before architecture or code.
+
+**Contributors:** configure [Developer Setup](./16-developer-setup.md) (JDK 17 + Maven commands) before your first build.
 
 ---
 

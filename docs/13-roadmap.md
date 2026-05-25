@@ -1,5 +1,7 @@
 # 13 — Roadmap
 
+> Local build commands (JDK 17, Maven, pnpm): [Developer Setup](./16-developer-setup.md).
+
 ## 12-Week MVP Plan
 
 ---

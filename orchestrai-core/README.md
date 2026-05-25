@@ -7,23 +7,12 @@ Shared domain models (Flow, Execution, TaskRun, enums). **Framework-agnostic** â
 - **JDK 17** (matches root `pom.xml` `java.version`)
 - **Lombok** (annotation processing at compile time)
 
-```bash
-# SDKMAN (repo includes .sdkmanrc)
-sdk env install   # or: sdk use java 17.0.17-tem
-
-# Or system OpenJDK 17
-export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-export PATH="$JAVA_HOME/bin:$PATH"
-```
-
-## Build & test
+Full commands (SDKMAN, `JAVA_HOME`, Maven, Quarkus dev): **[docs/16-developer-setup.md](../docs/16-developer-setup.md)**.
 
 ```bash
 java -version   # must show 17.x
 mvn test -pl orchestrai-core
 ```
-
-The `maven-enforcer-plugin` fails the build on JDK 21/25 with a clear message.
 
 ## Lombok
 
