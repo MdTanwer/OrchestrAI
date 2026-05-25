@@ -24,9 +24,14 @@ import lombok.extern.jackson.Jacksonized;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Flow {
 
+    /**
+     * Database primary key. JSON/API field {@code uuid}; YAML flow id uses {@link #flowId} ({@code id}).
+     * {@code FlowEntity} must map: {@code uuid} → {@code flows.id}, {@code id} → {@code flows.flow_id}.
+     */
     @JsonProperty("uuid")
     private UUID id;
 
+    /** User-defined flow identifier from YAML ({@code id: my-flow}). Not the DB UUID. */
     @JsonProperty("id")
     private String flowId;
 

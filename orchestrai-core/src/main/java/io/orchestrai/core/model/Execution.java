@@ -34,6 +34,11 @@ public class Execution {
     @Builder.Default
     private Map<String, Object> inputs = new LinkedHashMap<>();
 
+    /**
+     * Task outputs keyed by task id. Parallel parents store nested maps
+     * (e.g. {@code outputs.check-services.server-a} → {@code Map} of child outputs).
+     * JEXL resolves dot paths such as {@code outputs.check-services.server-a.body}.
+     */
     @Builder.Default
     private Map<String, Object> outputs = new LinkedHashMap<>();
 

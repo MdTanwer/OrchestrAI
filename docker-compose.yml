@@ -4,6 +4,10 @@
 #   docker compose up -d
 #   docker compose ps
 #   docker compose down
+#
+# Postgres: host port 5433 → container 5432 (see application.properties).
+# When adding app services: start orchestrai-api first (Flyway), then executor/scheduler with
+#   depends_on: { orchestrai-api: { condition: service_healthy } }
 
 services:
 

@@ -2,9 +2,11 @@ package io.orchestrai.core.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.orchestrai.core.enums.BackoffType;
 import io.orchestrai.core.enums.ExecutionState;
 import io.orchestrai.core.enums.InputType;
 import io.orchestrai.core.enums.LogLevel;
@@ -131,6 +134,182 @@ class DomainModelJacksonTest {
         assertEquals(log.getMessage(), mapper.readValue(mapper.writeValueAsString(log), LogEntry.class).getMessage());
         assertEquals(TaskRunState.SUCCESS, mapper.readValue(mapper.writeValueAsString(result), TaskResult.class).getState());
         assertEquals(ExecutionState.SUCCESS, mapper.readValue(mapper.writeValueAsString(event), ExecutionEvent.class).getState());
+    }
+
+    @Test
+    void input_deserialize_defaultsFromYaml() throws Exception {
+        String yaml = """
+                id: demo
+                namespace: examples
+                inputs:
+                  - id: region
+                    type: STRING
+                    defaults: US
+                tasks:
+                  - id: t1
+                    type: core.log
+                    message: ok
+                """;
+
+        Flow flow = ObjectMappers.yaml().readValue(yaml, Flow.class);
+
+        assertEquals("US", flow.getInputs().get(0).getDefaultValue());
+        assertTrue(mapper.writeValueAsString(flow.getInputs().get(0)).contains("\"defaults\":\"US\""));
+    }
+
+    @Test
+    void task_coreIf_deserialize_thenAndElse_fromYaml() throws Exception {
+        String yaml = """
+                id: branch-demo
+                namespace: examples
+                tasks:
+                  - id: gate
+                    type: core.if
+                    condition: "{{ outputs.check.ok }}"
+                    then:
+                      - id: ok-path
+                        type: core.log
+                        message: green
+                    else:
+                      - id: err-path
+                        type: core.log
+                        message: red
+                """;
+
+        Flow flow = ObjectMappers.yaml().readValue(yaml, Flow.class);
+        Task gate = flow.getTasks().get(0);
+
+        assertEquals("core.if", gate.getType());
+        assertEquals("{{ outputs.check.ok }}", gate.getCondition());
+        assertEquals(1, gate.getThen().size());
+        assertEquals("ok-path", gate.getThen().get(0).getId());
+        assertEquals(1, gate.getElseTasks().size());
+        assertEquals("err-path", gate.getElseTasks().get(0).getId());
+    }
+
+    @Test
+    void task_coreIf_roundTrip_json_serializesElseKey() throws Exception {
+        Task original = Task.builder()
+                .id("gate")
+                .type("core.if")
+                .condition("true")
+                .then(List.of(Task.builder().id("t").type("core.log").build()))
+                .elseTasks(List.of(Task.builder().id("e").type("core.log").build()))
+                .build();
+
+        String json = mapper.writeValueAsString(original);
+        assertTrue(json.contains("\"else\""));
+        assertFalse(json.contains("elseTasks"));
+
+        Task restored = mapper.readValue(json, Task.class);
+        assertEquals(1, restored.getElseTasks().size());
+        assertEquals("e", restored.getElseTasks().get(0).getId());
+    }
+
+    @Test
+    void task_coreParallel_deserialize_nestedTasks_fromYaml() throws Exception {
+        String yaml = """
+                id: parallel-demo
+                namespace: examples
+                tasks:
+                  - id: check-services
+                    type: core.parallel
+                    tasks:
+                      - id: server-a
+                        type: http.request
+                        url: "https://a.example/health"
+                      - id: server-b
+                        type: http.request
+                        url: "https://b.example/health"
+                """;
+
+        Flow flow = ObjectMappers.yaml().readValue(yaml, Flow.class);
+        Task parallel = flow.getTasks().get(0);
+
+        assertEquals("core.parallel", parallel.getType());
+        assertEquals(2, parallel.getTasks().size());
+        assertEquals("server-a", parallel.getTasks().get(0).getId());
+        assertEquals("https://a.example/health", parallel.getTasks().get(0).getConfig().get("url"));
+    }
+
+    @Test
+    void task_retry_deserialize_backoffAndInitialDelay_fromYaml() throws Exception {
+        String yaml = """
+                id: retry-demo
+                namespace: examples
+                tasks:
+                  - id: flaky
+                    type: openai.chat
+                    retry:
+                      maxAttempts: 3
+                      backoff: exponential
+                      initialDelay: "1s"
+                    prompt: hi
+                """;
+
+        Flow flow = ObjectMappers.yaml().readValue(yaml, Flow.class);
+        RetryPolicy retry = flow.getTasks().get(0).getRetry();
+
+        assertNotNull(retry);
+        assertEquals(3, retry.getMaxAttempts());
+        assertEquals(BackoffType.EXPONENTIAL, retry.getBackoff());
+        assertEquals(Duration.ofSeconds(1), retry.getInitialDelay());
+        assertEquals("hi", flow.getTasks().get(0).getConfig().get("prompt"));
+    }
+
+    @Test
+    void task_coreForeach_deserialize_itemsAndTasks_fromYaml() throws Exception {
+        String yaml = """
+                id: loop-demo
+                namespace: examples
+                tasks:
+                  - id: outreach
+                    type: core.foreach
+                    items: "{{ outputs.accounts.body }}"
+                    tasks:
+                      - id: email
+                        type: openai.chat
+                        prompt: "Hi {{ taskrun.value.name }}"
+                """;
+
+        Flow flow = ObjectMappers.yaml().readValue(yaml, Flow.class);
+        Task loop = flow.getTasks().get(0);
+
+        assertEquals("core.foreach", loop.getType());
+        assertEquals("{{ outputs.accounts.body }}", loop.getItems());
+        assertEquals(1, loop.getTasks().size());
+        assertEquals("email", loop.getTasks().get(0).getId());
+    }
+
+    @Test
+    void task_ifCondition_skipField_fromYaml() throws Exception {
+        String yaml = """
+                id: skip-demo
+                namespace: examples
+                tasks:
+                  - id: optional-step
+                    type: core.log
+                    if: "{{ inputs.runOptional }}"
+                    message: ran
+                """;
+
+        Flow flow = ObjectMappers.yaml().readValue(yaml, Flow.class);
+
+        assertEquals("{{ inputs.runOptional }}", flow.getTasks().get(0).getIfCondition());
+        assertEquals("ran", flow.getTasks().get(0).getConfig().get("message"));
+    }
+
+    @Test
+    void flow_roundTrip_json_preservesUuidAndFlowIdKeys() throws Exception {
+        Flow original = sampleFlow();
+        String json = mapper.writeValueAsString(original);
+
+        assertTrue(json.contains("\"uuid\""));
+        assertTrue(json.contains("\"id\":\"release-notes-copilot\""));
+
+        Flow restored = mapper.readValue(json, Flow.class);
+        assertEquals(original.getId(), restored.getId());
+        assertEquals(original.getFlowId(), restored.getFlowId());
     }
 
     @Test

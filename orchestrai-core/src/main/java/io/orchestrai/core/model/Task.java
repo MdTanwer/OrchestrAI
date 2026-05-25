@@ -38,10 +38,21 @@ public class Task {
     private Duration timeout;
     private RetryPolicy retry;
 
+    /**
+     * YAML {@code if} on any task: skip this task when the expression is false.
+     * Evaluated by the executor before dispatch; not used by {@code core.if}.
+     */
     @JsonProperty("if")
     private String ifCondition;
 
+    /**
+     * Required for {@code core.if} only: boolean branch expression.
+     * Do not use for per-task skip logic — use {@link #ifCondition} instead.
+     */
     private String condition;
+
+    /** Required for {@code core.foreach}: expression resolving to a JSON array. */
+    private String items;
 
     @Builder.Default
     private List<Task> tasks = new ArrayList<>();

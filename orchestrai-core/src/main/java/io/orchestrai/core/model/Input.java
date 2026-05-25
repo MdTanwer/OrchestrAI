@@ -1,6 +1,7 @@
 package io.orchestrai.core.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.orchestrai.core.enums.InputType;
 import lombok.AllArgsConstructor;
@@ -22,5 +23,8 @@ public class Input {
     @Builder.Default
     private boolean required = false;
     private String description;
+
+    /** YAML key {@code defaults} (see docs/04-yaml-schema.md). */
+    @JsonProperty("defaults")
     private Object defaultValue;
 }

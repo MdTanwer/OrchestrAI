@@ -2,6 +2,10 @@
 
 ## Docker Compose (Local Dev)
 
+The repository root [`docker-compose.yml`](../docker-compose.yml) exposes Postgres on **host port 5433** (not 5432). Local Quarkus `application.properties` files use `jdbc:postgresql://localhost:5433/orchestrai`. Inside Docker networks, apps use `postgres:5432`.
+
+When adding app services to Compose, run **Flyway from api-server first**, then start executor/scheduler with `depends_on: orchestrai-api: condition: service_healthy` so Hibernate does not start before migrations.
+
 ```yaml
 version: "3.8"
 
@@ -15,7 +19,9 @@ services:
       POSTGRES_USER: orchestrai
       POSTGRES_PASSWORD: orchestrai
     ports:
-      - "5432:5432"
+      # Repo docker-compose.yml maps host 5433 → container 5432 (avoids local port clashes).
+      # Quarkus application.properties use jdbc:postgresql://localhost:5433/orchestrai on the host.
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -41,9 +47,12 @@ services:
   orchestrai-api:
     build: ./api-server
     depends_on:
-      - postgres
-      - kafka
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     environment:
+      # Inside Docker network, Postgres listens on 5432 (not host-mapped 5433).
       DB_URL: jdbc:postgresql://postgres:5432/orchestrai
       DB_USER: orchestrai
       DB_PASSWORD: orchestrai

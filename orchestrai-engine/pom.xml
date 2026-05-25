@@ -33,6 +33,10 @@
             <artifactId>orchestrai-jdbc</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.orchestrai</groupId>
+            <artifactId>orchestrai-plugin-sdk</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-jexl3</artifactId>
         </dependency>
