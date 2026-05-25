@@ -1,7 +1,6 @@
 package io.orchestrai.core.model;
 
-import java.time.Instant;
-import java.util.UUID;
+import java.time.Duration;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
@@ -17,10 +16,11 @@ import lombok.extern.jackson.Jacksonized;
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class Secret {
+public class RetryPolicy {
 
-    private UUID id;
-    private String namespace;
-    private String key;
-    private Instant createdAt;
+    @Builder.Default
+    private int maxAttempts = 1;
+
+    private Duration delay;
+    private String type;
 }

@@ -1,10 +1,11 @@
-/**
- * TODO: Define TriggerType
- * Module: orchestrai-core
- * Enum: MANUAL, CRON, WEBHOOK, EVENT.
- */
 package io.orchestrai.core.enums;
 
+/**
+ * How an {@link io.orchestrai.core.model.Execution} was started.
+ */
 public enum TriggerType {
-    // TODO: add enum constants
+    MANUAL,
+    CRON,
+    WEBHOOK,
+    EVENT
 }

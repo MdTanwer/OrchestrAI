@@ -1,10 +1,17 @@
-/**
- * TODO: Define ExecutionState
- * Module: orchestrai-core
- * Enum: CREATED, RUNNING, SUCCESS, FAILED, CANCELLED, PAUSED.
- */
 package io.orchestrai.core.enums;
 
+/**
+ * Lifecycle state of a flow {@link io.orchestrai.core.model.Execution}.
+ */
 public enum ExecutionState {
-    // TODO: add enum constants
+    CREATED,
+    RUNNING,
+    PAUSED,
+    SUCCESS,
+    FAILED,
+    CANCELLED;
+
+    public boolean isTerminal() {
+        return this == SUCCESS || this == FAILED || this == CANCELLED;
+    }
 }
